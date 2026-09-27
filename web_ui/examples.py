@@ -85,16 +85,17 @@ TEXT_EXAMPLES: dict[str, dict] = {
 }
 
 # ── Pilier 2 : images ────────────────────────────────────────────────────────────────────
-# fichier -> (légende, attendu)
+# Trois versions par photo : authentique, attaque simple (arrête la classification, mais
+# instable sous un léger flou : détectée par le test déterministe), attaque adaptative (reste
+# stable sous le flou, défait ce test : seul le deuxième avis la rattrape) — mêmes termes que
+# partie_2.md. fichier -> (légende, attendu)
 IMAGE_EXAMPLES: list[tuple[str, str, str]] = [
     ("adversarial_vision/presentation/01_statue_originale.png", "Statue authentique", "allow"),
-    ("adversarial_vision/presentation/02_statue_truquee_2_modeles.png", "Statue truquée (flou + 2e avis)", "block"),
-    ("adversarial_vision/presentation/03_statue_truquee_LLM_seul.png", "Statue truquée (2e avis seul)", "block"),
+    ("adversarial_vision/presentation/02_statue_truquee_2_modeles.png", "Statue truquée — attaque simple", "block"),
+    ("adversarial_vision/presentation/03_statue_truquee_LLM_seul.png", "Statue truquée — attaque adaptative", "block"),
     ("adversarial_vision/presentation/04_plage_originale.png", "Plage authentique", "allow"),
-    ("adversarial_vision/presentation/05_plage_truquee_2_modeles.png", "Plage truquée (flou + 2e avis)", "block"),
-    ("adversarial_vision/presentation/06_plage_truquee_LLM_seul.png", "Plage truquée (2e avis seul)", "block"),
-    ("adversarial_vision/example/exemple_clean.png", "Exemple public authentique", "allow"),
-    ("adversarial_vision/example/exemple_adversarial.png", "Exemple public truqué", "block"),
+    ("adversarial_vision/presentation/05_plage_truquee_2_modeles.png", "Plage truquée — attaque simple", "block"),
+    ("adversarial_vision/presentation/06_plage_truquee_LLM_seul.png", "Plage truquée — attaque adaptative", "block"),
 ]
 
 # ── Pilier 3 : comportements d'agents ──────────────────────────────────────────────────────

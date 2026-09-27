@@ -55,6 +55,16 @@ CSS = """
 .banner {padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border-color-primary); margin: 4px 0 10px 0;}
 .voice-box {border: 1px solid #7c5cbf; border-radius: 8px; padding: 6px 12px; margin: 4px 0 10px 0;
             background: rgba(124,92,191,.10);}
+/* Gradio stylise sa case via border/background-color (appearance:none), pas accent-color :
+   on doit reprendre les mêmes propriétés pour que le contraste change vraiment. */
+.voice-box input[type="checkbox"] {
+    width: 22px !important; height: 22px !important; min-width: 22px !important;
+    border: 2px solid #7c5cbf !important; border-radius: 4px !important;
+    background-color: #fff !important;
+}
+.voice-box input[type="checkbox"]:checked {
+    background-color: #7c5cbf !important; border-color: #7c5cbf !important;
+}
 .caption-box {border: 1px dashed var(--border-color-primary); border-radius: 8px; padding: 10px 14px; margin: 8px 0;}
 """
 
@@ -331,7 +341,7 @@ def build() -> gr.Blocks:
                         go = gr.Button("Analyser", variant="primary")
                     with gr.Column(scale=5):
                         with gr.Group(elem_classes=["voice-box"]):
-                            voice = gr.Checkbox(value=False, label="🔊 Voix sur détection (Gradium)",
+                            voice = gr.Checkbox(value=True, label="🔊 Voix sur détection (Gradium)",
                                                  info="Joue à voix haute le verdict si Veilleur bloque ou demande confirmation — comme la démo en ligne de commande. Ne marche que si vous lancez cette UI en local (le son joue sur cette machine).")
                         out = gr.HTML(label="Verdict")
                         seen = gr.HTML()
@@ -341,7 +351,8 @@ def build() -> gr.Blocks:
             with gr.Tab("2 · Image", id="t_image"):
                 gr.Markdown(
                     "### Cette image est-elle truquée ?\nUne perturbation invisible peut faire prendre une statue pour une voiture de sport. "
-                    "Choisissez un des 8 exemples testés ou déposez votre propre image (elle reste sur cette machine, sauf si vous cochez le "
+                    "Choisissez un des 6 exemples testés (statue et plage, chacune en authentique / attaque simple / attaque adaptative) "
+                    "ou déposez votre propre image (elle reste sur cette machine, sauf si vous cochez le "
                     "deuxième avis). La sélection dit ce qu'est l'image ; Veilleur ne se prononce qu'après « Analyser »."
                 )
                 with gr.Row():
@@ -349,14 +360,14 @@ def build() -> gr.Blocks:
                         img = gr.Image(type="filepath", label="Image", height=320, sources=["upload"])
                         ex_img = gr.Examples(
                             examples=[[str(ROOT / p)] for p, _, _ in IMAGE_EXAMPLES],
-                            inputs=[img], example_labels=[c for _, c, _ in IMAGE_EXAMPLES], label="Les 8 exemples testés (cliquez pour choisir)", examples_per_page=8,
+                            inputs=[img], example_labels=[c for _, c, _ in IMAGE_EXAMPLES], label="Les 6 exemples testés (cliquez pour choisir)", examples_per_page=6,
                         )
                         cap_html = gr.HTML()
                         second = gr.Checkbox(value=core.live_mode(), label="Deuxième avis — LLM de vision (envoie l'image à l'API OpenAI)", interactive=core.live_mode())
                         goi = gr.Button("Analyser", variant="primary")
                     with gr.Column(scale=5):
                         with gr.Group(elem_classes=["voice-box"]):
-                            voicei = gr.Checkbox(value=False, label="🔊 Voix sur détection (Gradium)",
+                            voicei = gr.Checkbox(value=True, label="🔊 Voix sur détection (Gradium)",
                                                   info="Joue à voix haute dès que l'un des deux résultats signale une image truquée. Local uniquement.")
                         outi = gr.HTML("<div class='note'>Le verdict s'affichera ici : cliquez sur un exemple ou déposez une image, puis « Analyser ».</div>")
                         detail = gr.HTML()
