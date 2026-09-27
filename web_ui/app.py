@@ -350,7 +350,9 @@ def build() -> gr.Blocks:
                         out = gr.HTML(label="Verdict")
                         seen = gr.HTML()
                 sel.change(on_text_example, sel, [request, content, why])
-                go.click(run_text, [sel, request, content, guardian, voice], [out, seen])
+                go.click(lambda: gr.Button(interactive=False), None, go) \
+                    .then(run_text, [sel, request, content, guardian, voice], [out, seen]) \
+                    .then(lambda: gr.Button(interactive=True), None, go)
 
             with gr.Tab("2 · Image", id="t_image"):
                 gr.Markdown(
@@ -375,7 +377,9 @@ def build() -> gr.Blocks:
                                                   info="Joue à voix haute dès que l'un des deux résultats signale une image truquée. Local uniquement.")
                         outi = gr.HTML("<div class='note'>Le verdict s'affichera ici : cliquez sur un exemple ou déposez une image, puis « Analyser ».</div>")
                         detail = gr.HTML()
-                goi.click(run_image, [img, second, voicei], [outi, detail])
+                goi.click(lambda: gr.Button(interactive=False), None, goi) \
+                    .then(run_image, [img, second, voicei], [outi, detail]) \
+                    .then(lambda: gr.Button(interactive=True), None, goi)
                 ex_img.load_input_event.then(on_image_selected, img, [cap_html, outi, detail])
                 img.upload(on_image_selected, img, [cap_html, outi, detail])
 
@@ -406,14 +410,21 @@ def build() -> gr.Blocks:
                 table = gr.HTML(value=journal)
                 gr.Button("Actualiser").click(journal, None, table)
 
-        # boutons de la vue d'ensemble : on va à l'onglet, l'exemple est prêt et l'analyse est lancée
+        # boutons de la vue d'ensemble : on va à l'onglet, l'exemple est prêt et l'analyse est lancée.
+        # Le bouton "un clic" ET le bouton "Analyser" de l'onglet visé sont désactivés pendant le
+        # traitement (modèle + éventuellement LLM + voix, plusieurs secondes) : sans ça, un second
+        # clic pendant que le premier tourne encore se met en file et relance toute l'analyse une
+        # deuxième fois (observé en test : deux verdicts et deux narrations, ~36 s d'écart).
         trap = next(e for e in TEXT_EXAMPLES.values() if e["expected"] == "block")
-        b_text.click(lambda: (gr.Tabs(selected="t_texte"), trap["title"], trap["request"], trap["content"], f"**Ce que ce cas teste.** {trap['why']}"),
-                     None, [tabs, sel, request, content, why]).then(run_text, [sel, request, content, guardian, voice], [out, seen])
+        b_text.click(lambda: (gr.Tabs(selected="t_texte"), trap["title"], trap["request"], trap["content"], f"**Ce que ce cas teste.** {trap['why']}", gr.Button(interactive=False)),
+                     None, [tabs, sel, request, content, why, go]) \
+            .then(run_text, [sel, request, content, guardian, voice], [out, seen]) \
+            .then(lambda: gr.Button(interactive=True), None, go)
         fake = str(ROOT / next(p for p, _, exp in IMAGE_EXAMPLES if exp == "block"))
-        b_img.click(lambda: (gr.Tabs(selected="t_image"), fake), None, [tabs, img]) \
+        b_img.click(lambda: (gr.Tabs(selected="t_image"), fake, gr.Button(interactive=False)), None, [tabs, img, goi]) \
             .then(on_image_selected, img, [cap_html, outi, detail]) \
-            .then(run_image, [img, second, voicei], [outi, detail])
+            .then(run_image, [img, second, voicei], [outi, detail]) \
+            .then(lambda: gr.Button(interactive=True), None, goi)
         b_agent.click(lambda: gr.Tabs(selected="t_agent"), None, tabs)
     return demo
 
