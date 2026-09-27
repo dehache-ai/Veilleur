@@ -145,7 +145,10 @@ class MicrophoneAnswer:
         return buffer.getvalue()
 
     async def get(self, attempt: int) -> str:
-        print("🎙️  Parlez maintenant (le micro s'arrête après un court silence)...")
+        # flush=True : sans lui, ce print peut rester dans le tampon de sortie tant que le process
+        # tourne en sous-process avec la sortie redirigée (pas un terminal) — l'invite "Parlez
+        # maintenant" arriverait après coup dans l'UI web, une fois l'enregistrement déjà terminé.
+        print("🎙️  Parlez maintenant (le micro s'arrête après un court silence)...", flush=True)
         wav_bytes = await asyncio.to_thread(self._record)
         return await transcribe(wav_bytes) if wav_bytes else ""
 
@@ -207,7 +210,7 @@ async def confirm_with_user(
     for attempt in range(MAX_ATTEMPTS):
         attempts = attempt + 1
         spoken = question if attempt == 0 else RETRY_QUESTION
-        print(f"🗣️  Veilleur : {spoken}")
+        print(f"🗣️  Veilleur : {spoken}", flush=True)  # flush : visible avant la synthèse/lecture, qui prend du temps
         if speak:
             try:
                 audio_path, _ = await synthesize(spoken, stem=f"confirmation_question_{attempt}", voice_id=voice_id)

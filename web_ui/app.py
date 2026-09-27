@@ -278,13 +278,15 @@ def scenario_outcome_card(out: str) -> str:
     return f"<div class='vc {cls}'><div class='head'>{esc(outcome)}</div>{why}</div>"
 
 
-def make_scenario_runner(key: str, sc: dict, voice: bool = False):
+def make_scenario_runner(key: str, sc: dict, voice: bool = False, confirm_mode: str | None = None):
     def run():
         rec = core.recorded().get("scenario", {}).get(key)
         if not core.live_mode() and rec and key != "n3":
             yield "[Mode démonstration : résultat enregistré lors de nos essais. Sans clé API, le scénario n'est pas relancé]\n\n" + rec["output"], ""
             return
         args = [a for a in sc["args"] if not (voice and a == "--no-voice")]
+        if confirm_mode:  # seuls les scénarios réseau (rogue_agent_demo.py) reconnaissent --confirm
+            args = [*args, "--confirm", confirm_mode]
         header = ""
         for out, code in core.run_script(args):
             summary = scenario_outcome_card(out) if code is not None else ""
@@ -292,11 +294,11 @@ def make_scenario_runner(key: str, sc: dict, voice: bool = False):
     return run
 
 
-def run_scenario_by_key(scenarios: dict, key: str, voice: bool):
+def run_scenario_by_key(scenarios: dict, key: str, voice: bool, confirm_mode: str | None = None):
     """Comme `make_scenario_runner`, mais `key` (et `voice`) sont lus au moment du clic (depuis
     une liste déroulante et une case à cocher) plutôt que figés à la construction de l'UI — pour
     un seul bouton « Lancer ce scénario » partagé par plusieurs scénarios."""
-    yield from make_scenario_runner(key, scenarios[key], voice)()
+    yield from make_scenario_runner(key, scenarios[key], voice, confirm_mode)()
 
 
 # ── Journal ──────────────────────────────────────────────────────────────────────────────
@@ -432,12 +434,17 @@ def build() -> gr.Blocks:
                         with gr.Group(elem_classes=["voice-box"]):
                             n_voice = gr.Checkbox(value=True, label="🔊 Voix sur détection (Gradium)",
                                                    info="Ce sous-process narre lui-même à voix haute quand le juge bloque ou demande confirmation. Local uniquement.")
+                        n_confirm = gr.Radio(
+                            [("🎙️ Voix réelle — répondez à voix haute au micro", "voice"), ("Réponse simulée (sans micro, toujours « non »)", "simulated")],
+                            value="voice", label="Confirmation (scénario 2, s'il rend ask_user)",
+                            info="« Voix réelle » attend votre réponse au micro (quelques secondes) puis un LLM l'interprète. « Simulée » répond toujours non, sans vous écouter — utile sans micro.",
+                        )
                         n_btn = gr.Button("Lancer ce scénario", variant="primary")
                         n_res = gr.HTML()
                         n_log = gr.Textbox(label="Sortie", lines=6, max_lines=24, autoscroll=True, placeholder="La sortie s'affiche ici, en direct, après « Lancer ce scénario ».")
                         n_sel.change(lambda k: scenario_info(NETWORK_SCENARIOS[k]), n_sel, n_info)
                         n_btn.click(lambda: gr.Button(interactive=False), None, n_btn) \
-                            .then(functools.partial(run_scenario_by_key, NETWORK_SCENARIOS), [n_sel, n_voice], [n_log, n_res]) \
+                            .then(functools.partial(run_scenario_by_key, NETWORK_SCENARIOS), [n_sel, n_voice, n_confirm], [n_log, n_res]) \
                             .then(lambda: gr.Button(interactive=True), None, n_btn)
                     with gr.Tab("Outils, web, échanges entre agents"):
                         gr.Markdown(
