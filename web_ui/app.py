@@ -247,6 +247,30 @@ def scenario_info(sc: dict) -> str:
     return f"{kind}{sc['summary']}\n\n**Ce que nous avons observé lors de nos essais :** {sc['expected']}{llm}"
 
 
+STEP_MARKER = re.compile(r"^[=\-]*\s*Étape\s+(\d+)\s*:\s*(.+?)\s*[=\-]*$", re.MULTILINE)
+
+
+def split_into_steps(out: str) -> list[tuple[str, str]]:
+    """Découpe le journal complet d'un scénario en segments (titre, texte), un par « Étape N : ... »
+    (marqueur déjà présent dans les scripts). Un scénario enchaîne souvent 4 à 6 étapes dans un seul
+    journal qui défile — illisible d'un coup ; ça permet de les regarder une par une."""
+    matches = list(STEP_MARKER.finditer(out))
+    if not matches:
+        return [("Tout", out.strip())] if out.strip() else []
+    segments = []
+    intro = out[: matches[0].start()].strip()
+    if intro:
+        segments.append(("Avant les étapes (contexte, mission)", intro))
+    for i, m in enumerate(matches):
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(out)
+        segments.append((f"Étape {m.group(1)} — {m.group(2)}", out[m.start() : end].strip()))
+    return segments
+
+
+def step_html(body: str) -> str:
+    return "<div class='note'>" + esc(body).replace("\n", "<br>") + "</div>"
+
+
 VERDICT_RANK = {"allow": 0, "ask_user": 1, "block": 2}
 
 
@@ -292,6 +316,19 @@ def make_scenario_runner(key: str, sc: dict, voice: bool = False, confirm_mode: 
             summary = scenario_outcome_card(out) if code is not None else ""
             yield header + out, summary
     return run
+
+
+def populate_steps(full_log: str):
+    segments = split_into_steps(full_log)
+    choices = [title for title, _ in segments]
+    # Démarre sur la première vraie étape plutôt que sur le contexte, quand il y en a une.
+    default = next((t for t in choices if t.startswith("Étape ")), choices[0] if choices else None)
+    view = step_html(next(body for t, body in segments if t == default)) if default else ""
+    return gr.Dropdown(choices=choices, value=default, visible=bool(choices)), view, segments
+
+
+def on_step_change(title: str, segments: list) -> str:
+    return next((step_html(body) for t, body in segments if t == title), "")
 
 
 def run_scenario_by_key(scenarios: dict, key: str, voice: bool, confirm_mode: str | None = None):
@@ -462,10 +499,16 @@ def build() -> gr.Blocks:
                                 gr.Markdown(scenario_info(sc))
                                 btn = gr.Button("Lancer ce scénario")
                                 res = gr.HTML(visible=False)
-                                log = gr.Textbox(label="Sortie", lines=4, max_lines=30, autoscroll=True, placeholder="La sortie s'affiche ici, en direct, après « Lancer ce scénario ».")
+                                segstate = gr.State([])
+                                steps_sel = gr.Dropdown(label="Étapes du scénario (une fois terminé — choisissez-en une)", choices=[], visible=False)
+                                step_view = gr.HTML()
+                                with gr.Accordion("Sortie brute complète (tout, à la suite)", open=False):
+                                    log = gr.Textbox(show_label=False, lines=4, max_lines=30, autoscroll=True, placeholder="La sortie s'affiche ici, en direct, après « Lancer ce scénario ».")
                                 btn.click(lambda: gr.Button(interactive=False), None, btn) \
                                     .then(functools.partial(run_scenario_by_key, OTHER_SCENARIOS, key), o_voice, [log, res]) \
+                                    .then(populate_steps, log, [steps_sel, step_view, segstate]) \
                                     .then(lambda: gr.Button(interactive=True), None, btn)
+                                steps_sel.change(on_step_change, [steps_sel, segstate], step_view)
 
             with gr.Tab("Journal"):
                 gr.Markdown("### Un seul contrat, un seul journal\nTous les piliers produisent le même verdict et l'écrivent au même endroit.")
