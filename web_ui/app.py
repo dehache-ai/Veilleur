@@ -73,8 +73,9 @@ def esc(x: str) -> str:
     return html.escape(x or "")
 
 
-def card(verdict: dict, *, path: str = "", expected: str = "", replayed: bool = False) -> str:
+def card(verdict: dict, *, path: str = "", expected: str = "", replayed: bool = False, avis: str = "") -> str:
     action = verdict["recommended_action"]
+    head = f"{avis} : {ACTION_LABEL[action]}" if avis else ACTION_LABEL[action]
     tags = f'<span class="tag">niveau de risque : {esc(verdict["risk_level"])}</span><span class="tag">type : {esc(verdict["anomaly_type"])}</span>'
     if replayed:
         tags += '<span class="tag">résultat enregistré lors de nos essais (mode démonstration)</span>'
@@ -85,7 +86,7 @@ def card(verdict: dict, *, path: str = "", expected: str = "", replayed: bool = 
         same = expected == action
         compare = f'<div class="meta">Attendu : <b>{ACTION_LABEL[expected]}</b> — {"conforme" if same else "<b>différent de ce que nous attendions</b>"}.</div>'
     return (
-        f'<div class="vc {ACTION_CLASS[action]}"><div class="head">{ACTION_LABEL[action]}</div>'
+        f'<div class="vc {ACTION_CLASS[action]}"><div class="head">{esc(head)}</div>'
         f'<div class="meta">{tags}</div><div class="why">{esc(verdict["explanation"])}</div>{compare}</div>'
     )
 
@@ -210,9 +211,9 @@ def run_image(path: str | None, second: bool, voice: bool):
     # Double résultat : le test du flou est déterministe (aucun LLM) ; le hackathon demande un
     # jugement LLM, apporté par le second avis — les deux sont montrés séparément plutôt que
     # fondus dans un seul verdict, pour que la part de chacun soit visible.
-    blur_card = card(r["blur_verdict"], path="Test du flou — déterministe, sans LLM", expected=expected, replayed=replayed)
+    blur_card = card(r["blur_verdict"], path="Test du flou (signal, sans LLM)", expected=expected, replayed=replayed, avis="Premier avis (déterministe)")
     if r.get("second_opinion_used"):
-        second_card = card(r["verdict"], path="Deuxième avis — modèle de vision + LLM", expected=expected, replayed=replayed)
+        second_card = card(r["verdict"], path="Modèle de vision + jugement LLM", expected=expected, replayed=replayed, avis="Second avis (LLM)")
     else:
         second_card = ("<div class='note'>Deuxième avis (LLM) non exécuté sur cet essai — cochez la case pour l'inclure "
                         "(l'image part alors vers l'API OpenAI). Sans lui, seul le test déterministe a jugé.</div>")
