@@ -43,6 +43,27 @@ def live_mode() -> bool:
     return bool(os.getenv("OPENAI_API_KEY"))
 
 
+def current_backend() -> str:
+    """« openai », « ollama », ou « inconnu » si la configuration ne peut pas être lue
+    (ex : `switch_backend.py` jamais lancé sur cette machine). Relit le même alias que
+    `switch_backend.py --status`, sans jamais rien modifier — pour que le bandeau de
+    l'UI dise le vrai backend actif plutôt que de supposer OpenAI (mode direct fonctionne
+    aussi avec Ollama, gratuit, via `VEILLEUR_UI_MODE=live`)."""
+    try:
+        import tomlkit
+
+        from switch_backend import ALIAS_NAME, BACKEND_TARGETS, DECK_FILE
+
+        deck = tomlkit.parse(DECK_FILE.read_text(encoding="utf-8"))
+        target = deck.get("llm", {}).get("aliases", {}).get(ALIAS_NAME)
+        for name, cfg in BACKEND_TARGETS.items():
+            if cfg["model_handle"] == target:
+                return name
+    except Exception:
+        pass
+    return "inconnu"
+
+
 def recorded() -> dict:
     try:
         return json.loads(RECORDED_FILE.read_text(encoding="utf-8"))
@@ -100,6 +121,30 @@ def judge_text(request: str, content: str, guardian: str) -> dict:
     used = _last_log_entry().get("guardian", guardian)
     suffix = used.split("+", 1)[1] if "+" in used else ""
     return {"verdict": verdict.to_dict(), "path": PATH_LABELS.get(suffix, f"Modèle de langage (gardien « {used} »)"), "preview": preview, "replayed": False}
+
+
+def narrate_if_blocking(verdict: dict) -> str:
+    """Synthétise et joue la voix Gradium (comme la démo CLI) si le verdict bloque ou demande
+    confirmation ; ne fait rien pour "allow". Renvoie "" en temps normal, ou un message
+    D'ERREUR EN TEXTE BRUT (pas de HTML : à échapper par l'appelant, cf. docstring du module)
+    si la synthèse a échoué (pas de GRADIUM_API_KEY, réseau...) — ne lève jamais, pour ne pas
+    casser l'affichage du verdict. Lecture audio synchrone (`winsound`) : n'a de sens QUE si
+    l'UI tourne localement sur la machine qu'on écoute (le son joue côté serveur Gradio, pas
+    dans le navigateur)."""
+    from victim_agent.narrator import narrate_verdict, play_audio
+    from victim_agent.veilleur_gate import RiskVerdict
+
+    v = RiskVerdict(**{k: verdict[k] for k in ("risk_level", "anomaly_type", "explanation", "recommended_action")})
+    if v.recommended_action not in ("block", "ask_user"):
+        return ""
+    try:
+        path = asyncio.run(narrate_verdict(v))
+        if path:
+            play_audio(path)
+        return ""
+    except Exception as exc:
+        msg = str(exc)
+        return f"Voix indisponible ({type(exc).__name__} : {msg[:150]}{'…' if len(msg) > 150 else ''})."
 
 
 # ── Pilier 2 : image ─────────────────────────────────────────────────────────────────────

@@ -79,7 +79,12 @@ def card(verdict: dict, *, path: str = "", expected: str = "", replayed: bool = 
 
 def banner() -> str:
     if core.live_mode():
-        return '<div class="banner">Mode <b>direct</b> : les gardiens LLM sont appelés (votre clé, quelques centimes par essai).</div>'
+        backend = core.current_backend()
+        detail = {
+            "openai": "LLM externe (OpenAI, votre clé) : quelques centimes par essai.",
+            "ollama": "LLM local (Ollama) : gratuit, mais plus lent.",
+        }.get(backend, "LLM externe ou local selon votre configuration (<code>python switch_backend.py --status</code> pour vérifier).")
+        return f'<div class="banner">Mode <b>direct</b> : les gardiens LLM sont réellement appelés. {detail}</div>'
     return (
         '<div class="banner">Mode <b>démonstration</b> : aucune clé API détectée, donc les cas proposés affichent le résultat <b>enregistré</b> lors de nos essais ; '
         "les couches déterministes tournent en direct. Pour tout essayer en direct, ajoutez <code>OPENAI_API_KEY</code> dans <code>.env</code> "
@@ -114,7 +119,17 @@ def preview_html(preview: dict) -> str:
     return "<div class='note'>" + "<br>".join(rows) + "</div>"
 
 
-def run_text(title: str, request: str, content: str, guardian: str):
+def voice_html(verdict: dict, voice: bool) -> str:
+    """Joue la voix (si cochée et si le verdict bloque/demande confirmation) et renvoie un
+    petit encart d'erreur si la synthèse a échoué — vide dans le cas normal (silencieux ou
+    voix jouée sans souci)."""
+    if not voice:
+        return ""
+    msg = core.narrate_if_blocking(verdict)
+    return f"<div class='note'>{esc(msg)}</div>" if msg else ""
+
+
+def run_text(title: str, request: str, content: str, guardian: str, voice: bool):
     if not (content or "").strip():
         return "<div class='banner'>Entrez un contenu à analyser.</div>", ""
     ex = find_text_example(title)
@@ -127,14 +142,14 @@ def run_text(title: str, request: str, content: str, guardian: str):
             r = core.judge_text(request or MISSION, content, guardian)
         except Exception as exc:  # jamais un écran blanc : on l'explique
             return f"<div class='banner'>Le gardien n'a pas pu répondre ({esc(type(exc).__name__)} : {esc(str(exc)[:200])}). Par prudence, ce contenu ne doit pas être considéré comme sûr.</div>", preview_html(preview)
-        return card(r["verdict"], path=r["path"], expected=expected), preview_html(r["preview"])
+        return card(r["verdict"], path=r["path"], expected=expected) + voice_html(r["verdict"], voice), preview_html(r["preview"])
 
     rec = core.recorded().get("text", {})
     key = next((k for k, e in TEXT_EXAMPLES.items() if e is ex), None)
     if same_as_example and key in rec:
         r = rec[key]
         note = "" if guardian == "baseline" else "<div class='note'>Le résultat enregistré correspond au gardien « baseline » (défaut).</div>"
-        return card(r["verdict"], path=r["path"], expected=expected, replayed=True) + note, preview_html(preview)
+        return card(r["verdict"], path=r["path"], expected=expected, replayed=True) + note + voice_html(r["verdict"], voice), preview_html(preview)
     if preview["rule_hit"]:
         v = {"risk_level": "critique", "anomaly_type": "instruction_cachee", "explanation": preview["rule_text"] + " Bloqué par les règles, sans modèle.", "recommended_action": "block"}
         return card(v, path=core.PATH_LABELS["heuristic"]), preview_html(preview)
@@ -274,14 +289,21 @@ def build() -> gr.Blocks:
                         why = gr.Markdown(f"**Ce que ce cas teste.** {list(TEXT_EXAMPLES.values())[0]['why']}")
                         request = gr.Textbox(value=list(TEXT_EXAMPLES.values())[0]["request"], label="Demande de l'utilisateur à l'agent", lines=1)
                         content = gr.Textbox(value=list(TEXT_EXAMPLES.values())[0]["content"], label="Contenu reçu par l'agent (à juger)", lines=7)
-                        guardian = gr.Radio(["baseline", "hybrid", "contextual"], value="baseline", label="Gardien",
-                                            info="baseline = LLM seul (défaut) · hybrid = LLM + préfiltre HuggingFace externe · contextual = LLM en deux étapes")
+                        guardian = gr.Radio(
+                            ["baseline", "hybrid", "contextual"], value="baseline", label="Gardien",
+                            info="baseline = LLM seul (défaut, le mieux mesuré) · hybrid = + préfiltre HuggingFace externe "
+                                 "(mesuré moins bon : 24 % de faux positifs sur données réelles, gardé pour montrer le "
+                                 "composant tiers) · contextual = LLM en deux étapes (mesuré moins bon aussi : 70 % de "
+                                 "faux positifs sur le benchmark public, latence doublée)",
+                        )
+                        voice = gr.Checkbox(value=False, label="Voix sur détection (Gradium)",
+                                             info="Joue à voix haute le verdict si Veilleur bloque ou demande confirmation — comme la démo en ligne de commande. Ne marche que si vous lancez cette UI en local (le son joue sur cette machine).")
                         go = gr.Button("Analyser", variant="primary")
                     with gr.Column(scale=5):
                         out = gr.HTML(label="Verdict")
                         seen = gr.HTML()
                 sel.change(on_text_example, sel, [request, content, why])
-                go.click(run_text, [sel, request, content, guardian], [out, seen])
+                go.click(run_text, [sel, request, content, guardian, voice], [out, seen])
 
             with gr.Tab("2 · Image", id="t_image"):
                 gr.Markdown(
@@ -333,7 +355,7 @@ def build() -> gr.Blocks:
         # boutons de la vue d'ensemble : on va à l'onglet, l'exemple est prêt et l'analyse est lancée
         trap = next(e for e in TEXT_EXAMPLES.values() if e["expected"] == "block")
         b_text.click(lambda: (gr.Tabs(selected="t_texte"), trap["title"], trap["request"], trap["content"], f"**Ce que ce cas teste.** {trap['why']}"),
-                     None, [tabs, sel, request, content, why]).then(run_text, [sel, request, content, guardian], [out, seen])
+                     None, [tabs, sel, request, content, why]).then(run_text, [sel, request, content, guardian, voice], [out, seen])
         fake = str(ROOT / next(p for p, _, exp in IMAGE_EXAMPLES if exp == "block"))
         b_img.click(lambda: (gr.Tabs(selected="t_image"), fake), None, [tabs, img]).then(run_image, [img, second], [outi, detail])
         b_agent.click(lambda: gr.Tabs(selected="t_agent"), None, tabs)
