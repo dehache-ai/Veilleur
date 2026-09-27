@@ -1,0 +1,30 @@
+# Versions EXACTES avec lesquelles Veilleur a été vérifié de bout en bout dans un environnement vierge
+# (Python 3.11, Windows, venv, 2026-09-26) : gardiens texte (baseline, hybrid, contextual), juge réseau,
+# second avis image, interface web, scénario réseau avec blocage réel.
+#
+# À utiliser si `pip install -r requirements.txt` (qui n'impose que des minimums) installe un jour des
+# versions plus récentes qui cassent quelque chose :
+#
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu   # sans GPU, d'abord
+#   pip install -r requirements-tested.txt
+#
+# Ne pas oublier `pipelex init` (voir README, section Installation).
+#
+# Les versions de torch et torchvision (2.14.0 et 0.29.0, roues CPU) ne sont pas épinglées ici : les roues
+# « +cpu » ne viennent pas de PyPI. Voir la commande ci-dessus.
+
+pipelex==0.66.0
+gradium==0.6.4
+pyyaml==6.0.3
+rich==14.3.4
+python-dotenv==1.2.3
+tomlkit==0.14.0
+psutil==7.2.2
+mcp==2.2.0
+httpx2==2.13.1
+openai==3.3.0
+gradio==6.28.0
+pillow==12.3.0
+transformers==5.17.0
+truststore==0.10.4
+# optionnel (micro) : sounddevice==0.5.6 et numpy==2.4.6

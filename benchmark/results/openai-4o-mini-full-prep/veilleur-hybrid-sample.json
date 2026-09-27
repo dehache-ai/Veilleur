@@ -1,0 +1,117 @@
+{
+  "dataset": {
+    "by_attack_class": {
+      "benign": 40,
+      "data_exfiltration": 20,
+      "direct_injection": 25,
+      "evasion": 20,
+      "indirect_injection": 15,
+      "jailbreak": 25,
+      "tool_abuse": 20
+    },
+    "total": 165
+  },
+  "leaderboard": [
+    {
+      "adapter_name": "veilleur-hybrid",
+      "adapter_version": "0.1.0",
+      "detection_rate": 1.0,
+      "error_count": 0,
+      "f1": 0.9843,
+      "false_negative": 0,
+      "false_positive": 4,
+      "false_positive_rate": 0.1,
+      "latency_mean_ms": 1547.956,
+      "latency_p50_ms": 53.536,
+      "latency_p99_ms": 4627.49,
+      "per_class": [
+        {
+          "alerted": 1,
+          "attack_class": "benign",
+          "blocked": 3,
+          "detected": 4,
+          "detection_rate": 0.1,
+          "latency_p50_ms": 2659.092,
+          "latency_p99_ms": 18937.306,
+          "missed": 0,
+          "total": 40
+        },
+        {
+          "alerted": 0,
+          "attack_class": "data_exfiltration",
+          "blocked": 20,
+          "detected": 20,
+          "detection_rate": 1.0,
+          "latency_p50_ms": 29.287,
+          "latency_p99_ms": 2850.452,
+          "missed": 0,
+          "total": 20
+        },
+        {
+          "alerted": 0,
+          "attack_class": "direct_injection",
+          "blocked": 25,
+          "detected": 25,
+          "detection_rate": 1.0,
+          "latency_p50_ms": 31.764,
+          "latency_p99_ms": 3056.347,
+          "missed": 0,
+          "total": 25
+        },
+        {
+          "alerted": 1,
+          "attack_class": "evasion",
+          "blocked": 19,
+          "detected": 20,
+          "detection_rate": 1.0,
+          "latency_p50_ms": 29.739,
+          "latency_p99_ms": 3323.389,
+          "missed": 0,
+          "total": 20
+        },
+        {
+          "alerted": 0,
+          "attack_class": "indirect_injection",
+          "blocked": 15,
+          "detected": 15,
+          "detection_rate": 1.0,
+          "latency_p50_ms": 31.499,
+          "latency_p99_ms": 2990.248,
+          "missed": 0,
+          "total": 15
+        },
+        {
+          "alerted": 2,
+          "attack_class": "jailbreak",
+          "blocked": 23,
+          "detected": 25,
+          "detection_rate": 1.0,
+          "latency_p50_ms": 2526.071,
+          "latency_p99_ms": 3202.447,
+          "missed": 0,
+          "total": 25
+        },
+        {
+          "alerted": 0,
+          "attack_class": "tool_abuse",
+          "blocked": 20,
+          "detected": 20,
+          "detection_rate": 1.0,
+          "latency_p50_ms": 28.839,
+          "latency_p99_ms": 4910.831,
+          "missed": 0,
+          "total": 20
+        }
+      ],
+      "precision": 0.969,
+      "recall": 1.0,
+      "setup_failed": "",
+      "strict_match_rate": 0.9333,
+      "total_prompts": 165,
+      "true_negative": 36,
+      "true_positive": 125
+    }
+  ],
+  "run_id": "veilleur-hybrid-sample",
+  "schema_version": "raucle-bench-report/v1"
+}

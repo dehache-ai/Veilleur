@@ -1,0 +1,61 @@
+# Dépendances de Veilleur. Python >= 3.11 obligatoire (Pipelex).
+#
+# Créer un environnement isolé, avec l'outil de votre choix (l'un OU l'autre) :
+#   python -m venv .venv                      # puis l'activer :
+#       Windows (PowerShell) : .venv\Scripts\Activate.ps1
+#       Windows (cmd)        : .venv\Scripts\activate.bat
+#       macOS / Linux        : source .venv/bin/activate
+#   conda create -n veilleur python=3.11 && conda activate veilleur   # si vous utilisez conda
+#
+# Puis, dans l'environnement activé :
+#   pip install -r requirements.txt
+#   pipelex init            # une fois : crée ~/.pipelex/
+#
+# Les versions ci-dessous sont des MINIMUMS. Le projet a été développé avec pipelex 0.56 / openai 2.54, et
+# vérifié de bout en bout dans un environnement vierge avec les versions plus récentes que pip installe
+# aujourd'hui (pipelex 0.66, openai 3.3 : voir requirements-tested.txt). Si une version future casse quelque
+# chose, installer requirements-tested.txt (versions exactes) à la place.
+#
+# Détail, rôle de chaque paquet et parties optionnelles : DEPENDANCES.md
+
+# ── Cœur (gardiens, orchestrateur, runner, moniteur réseau, voix, Jinko) ──────────────────────
+pipelex>=0.56.0
+gradium>=0.6.4
+pyyaml>=6.0
+rich>=14.0
+python-dotenv>=1.0
+tomlkit>=0.14
+psutil>=7.0
+mcp>=2.2
+httpx2>=2.13
+
+# ── OpenAI : recommandé pour les gardiens LLM, et requis pour le second avis image ─────────
+# Les gardiens (Pipelex) appellent le modèle choisi par `python switch_backend.py openai`. L'alternative,
+# Ollama en local (gpt-oss:20b), est très lente (plusieurs minutes par appel possibles) : l'API OpenAI
+# (clé OPENAI_API_KEY dans .env) est en pratique le chemin normal. Le second avis image
+# (adversarial_vision/second_opinion.py) utilise aussi ce paquet et envoie l'image à l'API OpenAI.
+openai>=2.0
+
+# ── Interface web : python app.py ───────────────────────────────────────────────────────────────
+gradio>=6.28
+
+# ── Pilier 2 (images) ──────────────────────────────────────────────────────────────────────────
+# Sans GPU (recommandé, ~1 Go) : installer d'abord les roues CPU, AVANT ce fichier :
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# Sinon, pip télécharge les variantes CUDA, beaucoup plus lourdes et inutiles ici.
+torch>=2.14
+torchvision>=0.29
+pillow>=12.0
+
+# ── Gardien « hybrid » (défaut) : préfiltre HuggingFace NeuralTrust/prompt-guard-oss-small ────
+# Si le modèle ne peut pas être téléchargé, le gardien retombe sur le LLM seul.
+transformers>=5.17
+truststore>=0.10
+
+# ── Optionnel : réponse vocale au micro (`--confirm voice`) ────────────────────────────────────
+# Décommenter pour l'utiliser. Sans lui, tout le reste fonctionne (clavier ou voix synthétique).
+# sounddevice>=0.5
+# numpy>=2.0
+
+# ── À NE PAS installer ──────────────────────────────────────────────────────────────────────────
+# pip-system-certs : il modifie ssl globalement et casse le client Jinko (voir DEPENDANCES.md).

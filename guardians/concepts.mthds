@@ -1,0 +1,21 @@
+domain = "veilleur_guardian"
+description = "Concepts partagés par tous les gardiens Veilleur : l'action surveillée en entrée, le verdict de sécurité en sortie. Défini une seule fois ici, jamais dupliqué dans baseline.mthds / contextual.mthds."
+
+[concept.MonitoredAction]
+description = "Une action ou un contenu à évaluer avant exécution par l'agent surveillé"
+
+[concept.MonitoredAction.structure]
+source = { type = "text", description = "D'où vient ce contenu : réponse d'outil, page web, document, etc.", required = true }
+original_user_intent = { type = "text", description = "La demande initiale de l'utilisateur à l'agent surveillé", required = true }
+content_or_action = { type = "text", description = "Le contenu reçu ou l'action que l'agent s'apprête à exécuter", required = true }
+
+[concept.RiskAssessment]
+description = "Verdict de sécurité sur une action ou un contenu surveillé"
+
+[concept.RiskAssessment.structure]
+risk_level = { type = "text", description = "Niveau de risque évalué", choices = ["nul", "faible", "moyen", "élevé", "critique"], required = true }
+anomaly_type = { type = "text", description = "Type d'anomalie détectée si applicable", choices = [
+  "aucune", "instruction_cachee", "ecart_intention", "exfiltration_suspectee", "action_non_demandee"
+], required = true }
+explanation = { type = "text", description = "Explication claire, en français simple, destinée à être lue à voix haute", required = true }
+recommended_action = { type = "text", description = "Action recommandée", choices = ["allow", "block", "ask_user"], required = true }

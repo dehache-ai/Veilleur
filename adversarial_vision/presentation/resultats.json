@@ -1,0 +1,88 @@
+{
+ "images": {
+  "01_statue_originale.png": {
+   "resnet_label": "pedestal",
+   "resnet_conf": 0.223,
+   "blur_verdict": "allow",
+   "blur_detects": false,
+   "second_opinion_asked": false,
+   "second_opinion_incompatible": 0,
+   "second_opinion_trials": 0,
+   "description": ""
+  },
+  "02_statue_truquee_2_modeles.png": {
+   "resnet_label": "sports car",
+   "resnet_conf": 0.935,
+   "blur_verdict": "block",
+   "blur_detects": true,
+   "second_opinion_asked": true,
+   "second_opinion_incompatible": 5,
+   "second_opinion_trials": 5,
+   "description": "L'image montre la Statue de la Liberté sur son socle, avec un ciel bleu en arrière-plan."
+  },
+  "03_statue_truquee_LLM_seul.png": {
+   "resnet_label": "sports car",
+   "resnet_conf": 0.998,
+   "blur_verdict": "allow",
+   "blur_detects": false,
+   "second_opinion_asked": true,
+   "second_opinion_incompatible": 5,
+   "second_opinion_trials": 5,
+   "description": "L'image montre la Statue de la Liberté sur son socle, entourée d'eau et sous un ciel bleu parsemé de nuages."
+  },
+  "04_plage_originale.png": {
+   "resnet_label": "promontory",
+   "resnet_conf": 0.755,
+   "blur_verdict": "allow",
+   "blur_detects": false,
+   "second_opinion_asked": true,
+   "second_opinion_incompatible": 0,
+   "second_opinion_trials": 5,
+   "description": "L'image montre une vue aérienne d'une formation rocheuse verdoyante entourée par une mer turquoise et une plage de sable."
+  },
+  "05_plage_truquee_2_modeles.png": {
+   "resnet_label": "airliner",
+   "resnet_conf": 1.0,
+   "blur_verdict": "block",
+   "blur_detects": true,
+   "second_opinion_asked": true,
+   "second_opinion_incompatible": 5,
+   "second_opinion_trials": 5,
+   "description": "L'image montre une formation rocheuse en forme de croissant entourée par des eaux turquoise et une plage de sable."
+  },
+  "06_plage_truquee_LLM_seul.png": {
+   "resnet_label": "airliner",
+   "resnet_conf": 1.0,
+   "blur_verdict": "allow",
+   "blur_detects": false,
+   "second_opinion_asked": true,
+   "second_opinion_incompatible": 5,
+   "second_opinion_trials": 5,
+   "description": "L'image montre une vue aérienne d'une formation rocheuse en forme de croissant entourée par des eaux turquoise et une plage de sable."
+  }
+ },
+ "plage_attaque_simple": {
+  "target": "airliner",
+  "eps_x255": 3,
+  "resnet_label": "airliner",
+  "resnet_conf": 1.0,
+  "blur_verdict": "block",
+  "blur_detects": true,
+  "second_opinion_asked": true,
+  "second_opinion_incompatible": 5,
+  "second_opinion_trials": 5,
+  "description": "L'image montre une formation rocheuse verdoyante surplombant une plage de sable et des eaux turquoise."
+ },
+ "plage_attaque_adaptative": {
+  "target": "airliner",
+  "eps_x255": 2,
+  "resnet_label": "airliner",
+  "resnet_conf": 1.0,
+  "blur_verdict": "allow",
+  "blur_detects": false,
+  "second_opinion_asked": true,
+  "second_opinion_incompatible": 5,
+  "second_opinion_trials": 5,
+  "description": "L'image montre une vue aérienne d'une formation rocheuse en forme de croissant entourée par des eaux turquoise et une plage de sable."
+ }
+}
