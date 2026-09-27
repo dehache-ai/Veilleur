@@ -260,7 +260,10 @@ def scenario_outcome_card(out: str) -> str:
     m = re.search(r"Issue de l'agent : (.+?) \(code", out)
     outcome = m.group(1) if m else "Terminé"
     stopped = "ARRÊTÉ" in outcome
-    verdicts = re.findall(r"Verdict\s*:\s*(allow|ask_user|block)\s*\(", out)
+    # Les scripts n'utilisent pas tous le même préfixe ("Verdict :", "Décision [stage] :",
+    # "Avant l'action [stage] :", "Gardien de périmètre... :"...) : on ne matche que la fin
+    # commune, universelle à tous ("... : action (...)"), pour couvrir les 4 scripts de ce pilier.
+    verdicts = re.findall(r":\s*(allow|ask_user|block)\s*\(", out)
     worst = max(verdicts, key=lambda v: VERDICT_RANK.get(v, 0)) if verdicts else "allow"
     if stopped:
         cls, note = "no", ""
@@ -444,6 +447,9 @@ def build() -> gr.Blocks:
                             "blanche, contrat de mission) et des décisions **avec LLM** (le juge tranche l'ambigu) — le "
                             "détail est indiqué dans chacun, dépliez pour le voir. Une clé API est nécessaire pour la partie LLM."
                         )
+                        with gr.Group(elem_classes=["voice-box"]):
+                            o_voice = gr.Checkbox(value=True, label="🔊 Voix sur détection (Gradium)",
+                                                   info="Chaque sous-process narre lui-même à voix haute quand un gardien bloque ou demande confirmation. Local uniquement.")
                         for key, sc in OTHER_SCENARIOS.items():
                             with gr.Accordion(sc["title"], open=False):
                                 gr.Markdown(scenario_info(sc))
@@ -451,7 +457,7 @@ def build() -> gr.Blocks:
                                 res = gr.HTML(visible=False)
                                 log = gr.Textbox(label="Sortie", lines=4, max_lines=30, autoscroll=True, placeholder="La sortie s'affiche ici, en direct, après « Lancer ce scénario ».")
                                 btn.click(lambda: gr.Button(interactive=False), None, btn) \
-                                    .then(make_scenario_runner(key, sc), None, [log, res]) \
+                                    .then(functools.partial(run_scenario_by_key, OTHER_SCENARIOS, key), o_voice, [log, res]) \
                                     .then(lambda: gr.Button(interactive=True), None, btn)
 
             with gr.Tab("Journal"):

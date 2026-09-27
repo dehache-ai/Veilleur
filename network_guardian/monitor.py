@@ -279,8 +279,12 @@ def classify_connection(
     )
 
 
-def _record_connection(pid: int, remote_ip: str, remote_port: int, verdict: RiskVerdict, *, already_logged: bool = False) -> None:
-    """Journalise (si ce n'est pas déjà fait) et affiche le verdict. Rapide : aucun réseau."""
+def _record_connection(pid: int, remote_ip: str, remote_port: int, verdict: RiskVerdict, *, already_logged: bool = False, source: str = "") -> None:
+    """Journalise (si ce n'est pas déjà fait) et affiche le verdict. Rapide : aucun réseau.
+
+    `source` dit qui a tranché (« règle déterministe » ou « juge LLM ») — affiché à l'écran pour
+    qu'on ne confonde jamais les deux, y compris quand le juge LLM échoue et qu'on retombe sur
+    la décision prudente du capteur (repli explicitement signalé comme tel)."""
     if not already_logged:  # un verdict du juge LLM est déjà journalisé par assess_risk
         log_verdict(
             source=f"connexion sortante de l'agent surveillé (pid {pid})",
@@ -289,7 +293,8 @@ def _record_connection(pid: int, remote_ip: str, remote_port: int, verdict: Risk
             guardian=GUARDIAN_NAME,
             verdict=verdict,
         )
-    print(f"[{remote_ip}:{remote_port}] Verdict : {verdict.recommended_action} ({verdict.risk_level}) — {verdict.explanation}")
+    tag = f" [{source}]" if source else ""
+    print(f"[{remote_ip}:{remote_port}]{tag} Verdict : {verdict.recommended_action} ({verdict.risk_level}) — {verdict.explanation}")
 
 
 async def _narrate_connection(verdict: RiskVerdict) -> None:
@@ -418,12 +423,12 @@ def monitor_process(
     # Le juge LLM (environ 2 s) et la narration vocale ne doivent PAS bloquer le sondage : sinon une
     # connexion brève ouverte et fermée pendant ce temps est manquée. Chaque événement qui demande un
     # juge, une narration ou un blocage part dans un thread de travail ; la boucle continue de sonder.
-    def finish(verdict: RiskVerdict, ip: str, port: int, target: str, already_logged: bool) -> None:
+    def finish(verdict: RiskVerdict, ip: str, port: int, target: str, already_logged: bool, source: str = "") -> None:
         """Ordre : journal et affichage (rapides), BLOCAGE, puis narration (lente). Aucune étape ne peut empêcher la suivante."""
         with lock:
             verdicts.append(verdict)
         try:
-            _record_connection(pid, ip, port, verdict, already_logged=already_logged)
+            _record_connection(pid, ip, port, verdict, already_logged=already_logged, source=source)
         except Exception as exc:
             print(f"(journalisation impossible : {type(exc).__name__} : {exc})")
         try:
@@ -441,9 +446,11 @@ def monitor_process(
         ne serait plus jamais rejugée (`seen`). Le repli est le verdict prudent du capteur."""
         try:
             verdict = asyncio.run(judge_network_event(kind, ip, port, context, details, fallback, local_ports))
+            source = "juge LLM"
         except BaseException as exc:
             verdict = RiskVerdict(fallback.risk_level, fallback.anomaly_type, f"Juge LLM indisponible ({type(exc).__name__}) : décision prudente du capteur. {fallback.explanation}", fallback.recommended_action)
-        finish(verdict, ip, port, target, already_logged=not verdict.explanation.startswith("Juge LLM indisponible"))
+            source = "juge LLM indisponible — repli sur le capteur déterministe"
+        finish(verdict, ip, port, target, already_logged=not verdict.explanation.startswith("Juge LLM indisponible"), source=source)
 
     while time.time() < deadline and not killed.is_set() and (stop_event is None or not stop_event.is_set()):
         parent_alive = True
@@ -548,7 +555,7 @@ def monitor_process(
                     if context:
                         submit(judge_then_finish, "rythme de connexions inhabituel", c.raddr.ip, c.raddr.port, details, fallback, target)
                     else:
-                        submit(finish, fallback, c.raddr.ip, c.raddr.port, target, False)
+                        submit(finish, fallback, c.raddr.ip, c.raddr.port, target, False, "règle déterministe (pas de contexte fourni pour juger le rythme)")
 
             # Destination : jugée une seule fois par (adresse, port).
             key = (c.raddr.ip, c.raddr.port)
@@ -560,7 +567,7 @@ def monitor_process(
             )
             target = f"{c.raddr.ip}:{c.raddr.port}"
             if verdict.recommended_action == "allow":
-                finish(verdict, c.raddr.ip, c.raddr.port, target, False)  # cas courant : immédiat, sans LLM ni narration
+                finish(verdict, c.raddr.ip, c.raddr.port, target, False, "règle déterministe (liste blanche)")  # cas courant : immédiat, sans LLM ni narration
             elif context:
                 # Hors liste blanche : le capteur ne tranche pas, le juge LLM oui (sans bloquer le sondage).
                 submit(
@@ -568,7 +575,7 @@ def monitor_process(
                     "destination absente de la liste blanche du capteur déterministe.", verdict, target,
                 )
             else:
-                submit(finish, verdict, c.raddr.ip, c.raddr.port, target, False)
+                submit(finish, verdict, c.raddr.ip, c.raddr.port, target, False, "règle déterministe (pas de contexte fourni pour juger)")
 
         time.sleep(interval)
 
