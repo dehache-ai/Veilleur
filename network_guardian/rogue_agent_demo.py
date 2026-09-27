@@ -101,12 +101,17 @@ def run_scenario(title: str, code: str, port: int, *, voice: bool, context: Netw
     time.sleep(0.3)
     proc = subprocess.Popen([sys.executable, "-c", code])
     print(f"=== Surveillance réseau de l'agent (pid={proc.pid}) ===")
+    enforced = threading.Event()
     verdicts = monitor_process(
         proc.pid, duration=duration, interval=0.1, voice=voice, context=context, extra_allowed_local_ports=allowed_ports,
-        enforcement="kill" if enforce else None,
+        enforcement="kill" if enforce else None, enforced_event=enforced,
     )
     proc.wait()
-    outcome = "ARRÊTÉ par Veilleur (blocage réel)" if proc.returncode != 0 else "terminé normalement (rien n'a été arrêté)"
+    # `enforced`, pas `proc.returncode` : un arrêt réel confirmé côté moniteur (psutil) ne fait pas
+    # toujours remonter un code de sortie non nul jusqu'à ce `Popen` — observé en test, cf. la note
+    # dans monitor.py::monitor_process. Se fier au code de sortie disait parfois "rien n'a été
+    # arrêté" alors que le process avait bel et bien été tué.
+    outcome = "ARRÊTÉ par Veilleur (blocage réel)" if enforced.is_set() else "terminé normalement (rien n'a été arrêté)"
     print(f"\n{len(verdicts)} événement(s) réseau jugé(s) et journalisé(s). Issue de l'agent : {outcome} (code de sortie {proc.returncode}).\n")
 
 

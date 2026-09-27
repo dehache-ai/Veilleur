@@ -318,6 +318,7 @@ def monitor_process(
     context: NetworkContext | None = None,
     extra_allowed_local_ports: set[int] | None = None,
     enforcement: str | None = None,
+    enforced_event: threading.Event | None = None,
 ) -> list[RiskVerdict]:
     """Surveille les connexions sortantes du process `pid` pendant `duration`
     secondes (sondage toutes les `interval` secondes), ou jusqu'à ce que
@@ -334,6 +335,12 @@ def monitor_process(
     moniteur observe le process de l'agent lui-même, l'arrêter couperait aussi le travail légitime, donc
     l'option n'y est pas activée. Le blocage intervient APRÈS la détection (et l'éventuel appel au
     juge LLM, environ 2 s) : la connexion a déjà été établie. Un verdict `ask_user` n'arrête rien.
+
+    `enforced_event`, si fourni, est levé quand un arrêt réel a effectivement eu lieu — l'appelant
+    ne doit PAS déduire ce fait du code de sortie du process observé : `psutil.Process.kill()` (utilisé
+    ici) ne fait pas toujours remonter un code de sortie non nul au `subprocess.Popen` de l'appelant
+    (observé : un arrêt réel confirmé par `psutil.wait_procs`, suivi malgré tout d'un `returncode`
+    à 0 côté `Popen`). C'est cet événement, pas le code de sortie, qui fait foi.
 
     Le juge LLM et la narration tournent dans des threads de travail (`MAX_PARALLEL_JUDGES`) : le sondage
     continue pendant qu'ils s'exécutent. La liste renvoyée est dans l'ordre de fin des jugements."""
@@ -409,6 +416,8 @@ def monitor_process(
                 print(f"(blocage réel impossible : le process {pid} n'a pas pu être arrêté ; problème pour {problems})")
                 return False
             killed.set()
+            if enforced_event is not None:
+                enforced_event.set()
         suffix = f" (impossible d'arrêter aussi les process {problems})" if problems else ""
         print(f"⛔ BLOCAGE RÉEL : le process {pid} a été arrêté ({target}).{suffix}")
         log_verdict(
