@@ -500,10 +500,10 @@ def build() -> gr.Blocks:
                                 btn = gr.Button("Lancer ce scénario")
                                 res = gr.HTML(visible=False)
                                 segstate = gr.State([])
-                                steps_sel = gr.Dropdown(label="Étapes du scénario (une fois terminé — choisissez-en une)", choices=[], visible=False)
+                                steps_sel = gr.Dropdown(label="Étapes du scénario (apparaît une fois le scénario TERMINÉ — patientez, certains prennent plusieurs minutes)", choices=[], visible=False)
                                 step_view = gr.HTML()
-                                with gr.Accordion("Sortie brute complète (tout, à la suite)", open=False):
-                                    log = gr.Textbox(show_label=False, lines=4, max_lines=30, autoscroll=True, placeholder="La sortie s'affiche ici, en direct, après « Lancer ce scénario ».")
+                                with gr.Accordion("Sortie en direct, pendant l'exécution (déroulez pour suivre la progression en attendant)", open=True):
+                                    log = gr.Textbox(show_label=False, lines=6, max_lines=30, autoscroll=True, placeholder="La sortie s'affiche ici, en direct, après « Lancer ce scénario ». Les scénarios à plusieurs échanges (ex. « fuite d'un jeton ») appellent le LLM plusieurs fois de suite et peuvent prendre 2-3 minutes.")
                                 btn.click(lambda: gr.Button(interactive=False), None, btn) \
                                     .then(functools.partial(run_scenario_by_key, OTHER_SCENARIOS, key), o_voice, [log, res]) \
                                     .then(populate_steps, log, [steps_sel, step_view, segstate]) \
