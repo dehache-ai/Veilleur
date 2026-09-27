@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import functools
 import html
 import re
 import sys
@@ -242,7 +243,8 @@ def run_image(path: str | None, second: bool, voice: bool):
 
 def scenario_info(sc: dict) -> str:
     kind = f"**Comportement {sc['kind']}.** " if "kind" in sc else ""
-    return f"{kind}{sc['summary']}\n\n**Ce que nous avons observé lors de nos essais :** {sc['expected']}"
+    llm = f"\n\n**Appel à un LLM ?** {sc['llm']}" if sc.get("llm") else ""
+    return f"{kind}{sc['summary']}\n\n**Ce que nous avons observé lors de nos essais :** {sc['expected']}{llm}"
 
 
 def make_scenario_runner(key: str, sc: dict):
@@ -259,6 +261,13 @@ def make_scenario_runner(key: str, sc: dict):
                 summary = f"<div class='vc {'no' if 'ARRÊTÉ' in (m.group(1) if m else '') else 'ok'}'><div class='head'>{esc(m.group(1) if m else 'Terminé')}</div></div>" if m else ""
             yield header + out, summary
     return run
+
+
+def run_scenario_by_key(scenarios: dict, key: str):
+    """Comme `make_scenario_runner`, mais `key` est lu au moment du clic (depuis une liste
+    déroulante) plutôt que figé à la construction de l'UI — pour un seul bouton « Lancer ce
+    scénario » partagé par plusieurs scénarios."""
+    yield from make_scenario_runner(key, scenarios[key])()
 
 
 # ── Journal ──────────────────────────────────────────────────────────────────────────────
@@ -387,23 +396,34 @@ def build() -> gr.Blocks:
                 gr.Markdown("### L'agent reste-t-il dans son périmètre ?\nChaque bouton lance le vrai scénario, dans un process séparé, avec la sortie en direct.")
                 with gr.Tabs():
                     with gr.Tab("Agent sur le réseau"):
-                        gr.Markdown("Un agent simulé (process distinct) ouvre des connexions **locales** ; le moniteur les observe de l'extérieur. Rien ne sort de votre machine. Comparez les comportements normaux et anormaux.")
-                        for key, sc in NETWORK_SCENARIOS.items():
-                            with gr.Accordion(f"{'⚠️' if sc['kind'] == 'anormal' else '✅'} {sc['title']}", open=(key == "n1")):
-                                gr.Markdown(scenario_info(sc))
-                                btn = gr.Button("Lancer ce scénario")
-                                res = gr.HTML()
-                                log = gr.Textbox(label="Sortie", lines=4, max_lines=24, autoscroll=True, placeholder="La sortie s'affiche ici, en direct, après « Lancer ce scénario ».")
-                                btn.click(make_scenario_runner(key, sc), None, [log, res])
+                        gr.Markdown("Un agent simulé (process distinct) ouvre des connexions **locales** ; le moniteur les observe de l'extérieur. Rien ne sort de votre machine. Choisissez un scénario, regardez s'il appelle un LLM avant de le lancer, puis comparez.")
+                        n_choices = [(f"{'⚠️ anormal' if sc['kind'] == 'anormal' else '✅ normal'} — {sc['title']}", key) for key, sc in NETWORK_SCENARIOS.items()]
+                        n_sel = gr.Dropdown(n_choices, value=n_choices[0][1], label="Scénario")
+                        n_info = gr.Markdown(scenario_info(NETWORK_SCENARIOS[n_choices[0][1]]))
+                        n_btn = gr.Button("Lancer ce scénario", variant="primary")
+                        n_res = gr.HTML()
+                        n_log = gr.Textbox(label="Sortie", lines=6, max_lines=24, autoscroll=True, placeholder="La sortie s'affiche ici, en direct, après « Lancer ce scénario ».")
+                        n_sel.change(lambda k: scenario_info(NETWORK_SCENARIOS[k]), n_sel, n_info)
+                        n_btn.click(lambda: gr.Button(interactive=False), None, n_btn) \
+                            .then(functools.partial(run_scenario_by_key, NETWORK_SCENARIOS), n_sel, [n_log, n_res]) \
+                            .then(lambda: gr.Button(interactive=True), None, n_btn)
                     with gr.Tab("Outils, web, échanges entre agents"):
-                        gr.Markdown("Scénarios où l'agent (scripté) sort de sa mission : outil non prévu, page réservée, message qui transporte un secret. **Ils appellent le LLM** : il faut une clé API.")
+                        gr.Markdown(
+                            "Scénarios où l'agent (scripté — la séquence d'actions est écrite à l'avance dans la démo, "
+                            "pas décidée par un agent autonome) sort de sa mission : outil non prévu, page réservée, "
+                            "message qui transporte un secret. Chaque scénario mélange des décisions **sans LLM** (liste "
+                            "blanche, contrat de mission) et des décisions **avec LLM** (le juge tranche l'ambigu) — le "
+                            "détail est indiqué dans chacun, dépliez pour le voir. Une clé API est nécessaire pour la partie LLM."
+                        )
                         for key, sc in OTHER_SCENARIOS.items():
                             with gr.Accordion(sc["title"], open=False):
                                 gr.Markdown(scenario_info(sc))
                                 btn = gr.Button("Lancer ce scénario")
                                 res = gr.HTML(visible=False)
                                 log = gr.Textbox(label="Sortie", lines=4, max_lines=30, autoscroll=True, placeholder="La sortie s'affiche ici, en direct, après « Lancer ce scénario ».")
-                                btn.click(make_scenario_runner(key, sc), None, [log, res])
+                                btn.click(lambda: gr.Button(interactive=False), None, btn) \
+                                    .then(make_scenario_runner(key, sc), None, [log, res]) \
+                                    .then(lambda: gr.Button(interactive=True), None, btn)
 
             with gr.Tab("Journal"):
                 gr.Markdown("### Un seul contrat, un seul journal\nTous les piliers produisent le même verdict et l'écrivent au même endroit.")
