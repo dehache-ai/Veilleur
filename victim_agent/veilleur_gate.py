@@ -154,7 +154,7 @@ async def assess_risk(
     source: str,
     original_user_intent: str,
     content_or_action: str,
-    guardian: str = "hybrid",
+    guardian: str = "baseline",
 ) -> RiskVerdict:
     """Soumet une action/un contenu surveillé au gardien Veilleur choisi.
 
@@ -220,8 +220,8 @@ async def assess_risk(
                         break
         except Exception as exc:
             # Repli : préfiltre externe indisponible (modèle non téléchargé, réseau...).
-            # `hybrid` étant le gardien par défaut, on ne plante pas : le LLM seul juge,
-            # exactement comme `baseline`.
+            # On ne plante pas : le LLM seul juge, exactement comme `baseline` (le gardien
+            # par défaut depuis le 2026-09-27 — cf. note dans orchestrator.py).
             print(f"(préfiltre externe indisponible : {type(exc).__name__} — le LLM juge seul)")
             prefilter_result = None
         if prefilter_result is not None and prefilter_result.label == "jailbreak":

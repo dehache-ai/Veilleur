@@ -44,11 +44,15 @@ from network_guardian.scope_guard import HttpRequest, MissionContract, ScopeGuar
 from victim_agent.narrator import narrate_verdict, play_audio  # noqa: E402
 from victim_agent.veilleur_gate import RiskVerdict, assess_risk, veilleur_library  # noqa: E402
 
-# `hybrid` = `baseline` + préfiltre HuggingFace (composant externe, identifié comme tel).
-# Mesuré sur 165 prompts : équivalent à `baseline` pour la détection (2 prompts d'écart
-# sur 125 attaques), plus rapide sur les attaques évidentes. `--guardian baseline`
-# dans runner.py pour n'utiliser que le LLM.
-DEFAULT_GUARDIAN = "hybrid"
+# `hybrid` = `baseline` + préfiltre HuggingFace externe (composant tiers, identifié comme
+# tel) ; ce préfiltre peut bloquer AVANT que le LLM ne soit consulté. Repassé de `hybrid` à
+# `baseline` le 2026-09-27 après mesure sur 25 vraies réponses Jinko (pas écrites par nous) :
+# `hybrid` en faux positifs sur 6/25 (24 %), presque tous dus au préfiltre externe mal
+# calibré sur du texte dense/listing (scores 0.50-0.84) ; `baseline` en faux positifs sur
+# 1/24 (4 %, un cas indépendant du préfiltre). Voir `benchmark/jinko_real_eval.py` (privé)
+# et `partie_1.md`. `--guardian hybrid` dans runner.py reste disponible pour montrer le
+# composant externe (exigence du règlement du hackathon), simplement plus utilisé par défaut.
+DEFAULT_GUARDIAN = "baseline"
 
 
 @dataclass

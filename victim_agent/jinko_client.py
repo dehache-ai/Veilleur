@@ -27,7 +27,11 @@ load_project_env()
 
 JINKO_PROD_URL = "https://mcp.builders.gojinko.com/"
 JINKO_CALL_COUNTER_FILE = Path(__file__).resolve().parent.parent / "results" / "jinko_call_count.json"
-JINKO_MAX_CALLS = 10  # plafond conservateur — cf. note de sécurité en tête de fichier
+JINKO_MAX_CALLS = 120  # relevé le 2026-09-27 (crédits hackathon confirmés disponibles, marge
+# explicitement demandée). Historique : premier essai (6->31) raté côté gardien (bug de
+# script, cf. jinko_real_eval.py, corrigé) ; reprise propre à 25 requêtes (31->56, 24% de faux
+# positifs en hybrid) ; ce plafond couvre en plus la comparaison hybrid vs baseline (56->~81)
+# + marge pour la suite.
 
 
 class JinkoBudgetExceeded(RuntimeError):

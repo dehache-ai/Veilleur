@@ -118,9 +118,14 @@ Trois variantes de gardien, comparables sur les mêmes scénarios (une quatrièm
 
 | Gardien | Mécanique |
 |---|---|
-| `baseline` | Classification directe, un seul passage LLM |
+| `baseline` (**défaut**) | Classification directe, un seul passage LLM |
 | `contextual` | Deux étapes : intention perçue du contenu, puis comparaison à la demande de l'utilisateur |
-| `hybrid` (**défaut**) | Préfiltre externe HuggingFace + `baseline` |
+| `hybrid` | Préfiltre externe HuggingFace + `baseline` |
+
+`hybrid` a été le gardien par défaut jusqu'au 2026-09-27 ; mesuré ensuite sur 25 vraies
+réponses d'un service tiers (Jinko, pas des textes écrits par nous) : 24 % de faux positifs,
+presque tous dus au préfiltre externe mal calibré sur du texte dense (listes, prix), contre
+4 % pour `baseline` sur le même jeu — voir `partie_1.md`.
 
 Défense en profondeur, dans l'ordre : **prétraitement** déterministe
 (`victim_agent/preprocess.py` : caractères invisibles, base64, hexadécimal, César/ROT13,

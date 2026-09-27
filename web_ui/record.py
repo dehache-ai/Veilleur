@@ -27,7 +27,7 @@ def main() -> None:
         if "text" in parts:
             data["text"] = {}
             for key, ex in TEXT_EXAMPLES.items():
-                r = core.judge_text(ex["request"], ex["content"], "hybrid")
+                r = core.judge_text(ex["request"], ex["content"], "baseline")
                 data["text"][key] = {"verdict": r["verdict"], "path": r["path"]}
                 print("texte", key, r["verdict"]["recommended_action"], "(attendu", ex["expected"] + ")", flush=True)
         if "image" in parts:

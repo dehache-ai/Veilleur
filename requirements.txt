@@ -47,8 +47,9 @@ torch>=2.14
 torchvision>=0.29
 pillow>=12.0
 
-# ── Gardien « hybrid » (défaut) : préfiltre HuggingFace NeuralTrust/prompt-guard-oss-small ────
-# Si le modèle ne peut pas être téléchargé, le gardien retombe sur le LLM seul.
+# ── Gardien « hybrid » (option, plus utilisée par défaut depuis le 2026-09-27) : préfiltre
+# HuggingFace NeuralTrust/prompt-guard-oss-small. Si le modèle ne peut pas être téléchargé,
+# le gardien retombe sur le LLM seul.
 transformers>=5.17
 truststore>=0.10
 

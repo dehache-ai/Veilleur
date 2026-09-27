@@ -133,7 +133,7 @@ def run_text(title: str, request: str, content: str, guardian: str):
     key = next((k for k, e in TEXT_EXAMPLES.items() if e is ex), None)
     if same_as_example and key in rec:
         r = rec[key]
-        note = "" if guardian == "hybrid" else "<div class='note'>Le résultat enregistré correspond au gardien « hybrid » (défaut).</div>"
+        note = "" if guardian == "baseline" else "<div class='note'>Le résultat enregistré correspond au gardien « baseline » (défaut).</div>"
         return card(r["verdict"], path=r["path"], expected=expected, replayed=True) + note, preview_html(preview)
     if preview["rule_hit"]:
         v = {"risk_level": "critique", "anomaly_type": "instruction_cachee", "explanation": preview["rule_text"] + " Bloqué par les règles, sans modèle.", "recommended_action": "block"}
@@ -274,8 +274,8 @@ def build() -> gr.Blocks:
                         why = gr.Markdown(f"**Ce que ce cas teste.** {list(TEXT_EXAMPLES.values())[0]['why']}")
                         request = gr.Textbox(value=list(TEXT_EXAMPLES.values())[0]["request"], label="Demande de l'utilisateur à l'agent", lines=1)
                         content = gr.Textbox(value=list(TEXT_EXAMPLES.values())[0]["content"], label="Contenu reçu par l'agent (à juger)", lines=7)
-                        guardian = gr.Radio(["hybrid", "baseline", "contextual"], value="hybrid", label="Gardien",
-                                            info="hybrid = LLM + préfiltre HuggingFace externe (défaut) · baseline = LLM seul · contextual = LLM en deux étapes")
+                        guardian = gr.Radio(["baseline", "hybrid", "contextual"], value="baseline", label="Gardien",
+                                            info="baseline = LLM seul (défaut) · hybrid = LLM + préfiltre HuggingFace externe · contextual = LLM en deux étapes")
                         go = gr.Button("Analyser", variant="primary")
                     with gr.Column(scale=5):
                         out = gr.HTML(label="Verdict")

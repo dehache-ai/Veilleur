@@ -199,8 +199,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         "--guardian",
-        default="hybrid",
-        help=f"Gardien(s) séparés par des virgules, ou 'all' (défaut: hybrid). Choix : {', '.join(GUARDIAN_PIPE_CODES)}.",
+        default="baseline",
+        help=f"Gardien(s) séparés par des virgules, ou 'all' (défaut: baseline). Choix : {', '.join(GUARDIAN_PIPE_CODES)}.",
     )
     parser.add_argument("--scenario", help="N'exécuter qu'un seul scénario, par son id.")
     parser.add_argument("--scenarios-dir", default=str(DEFAULT_SCENARIOS_DIR), help="Dossier des scénarios YAML.")

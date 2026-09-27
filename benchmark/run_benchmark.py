@@ -59,7 +59,7 @@ def main() -> None:
     parser.add_argument("--datasets-dir", default=str(HERE.parent / "raucle-bench-src" / "datasets"))
     parser.add_argument("--sample-per-class", type=int, default=3, help="0 = jeu complet (165 prompts, long)")
     parser.add_argument("--sample-benign", type=int, default=None, help="Prompts bénins à prélever (défaut : --sample-per-class).")
-    parser.add_argument("--guardian", default="hybrid", choices=["baseline", "contextual", "hybrid"])
+    parser.add_argument("--guardian", default="baseline", choices=["baseline", "contextual", "hybrid"])
     parser.add_argument("--results-dir", default=str(HERE / "results"))
     args = parser.parse_args()
 

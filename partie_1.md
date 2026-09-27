@@ -196,19 +196,49 @@ de les identifier clairement, et cette séparation évite de les mélanger
 silencieusement aux gardiens 100 % LLM. Le verdict cite le modèle et sa
 licence.
 
-`hybrid` est une **option** : il n'est jamais utilisé par défaut.
+`hybrid` a été le gardien par défaut jusqu'au 2026-09-27, puis repassé à
+`baseline` après mesure de faux positifs sur de vraies données (voir
+ci-dessous) : `hybrid` reste une **option** explicite, pour montrer le
+composant externe (le règlement du hackathon demande de l'identifier
+clairement), mais n'est plus utilisé sans le demander.
+
+##### Mesure sur de vraies réponses (pas des textes écrits par nous)
+
+Tous les jeux ci-dessus (`travel_eval.jsonl`, raucle-bench) sont des textes
+que nous avons rédigés ou sélectionnés. Le 2026-09-27, pour sortir de ce
+biais, 25 vraies réponses de l'outil `hotel_search` de Jinko (production,
+25 destinations/dates variées, contenu que nous n'avons pas écrit) ont été
+jugées par `hybrid` puis par `baseline` (`benchmark/jinko_real_eval.py`,
+privé — contient de vraies réponses tierces) :
+
+| Gardien | Faux positifs (sur du contenu légitime) |
+|---|---|
+| `hybrid` | 6/25 (24 %) |
+| `baseline` | 1/24 (4 %, un appel Jinko en erreur réseau exclu) |
+
+Sur `hybrid`, 5 des 6 faux positifs viennent du préfiltre externe
+(`NeuralTrust/prompt-guard-oss-small`), qui bloque des listes d'hôtels tout à
+fait normales (prix, notes, nombre d'avis) avec des scores « jailbreak » de
+0.50 à 0.84 (seuil : 0.5) — un modèle apparemment mal calibré sur du texte
+dense/structuré de ce type, plutôt que sur des messages de chat. Le 6e (les
+deux gardiens le partagent) vient du LLM lui-même réagissant à un message
+d'erreur renvoyé par Jinko (paramètres de recherche invalides) plutôt qu'à
+une vraie attaque — défendable en soi, mais compté comme faux positif selon
+la définition utilisée partout ailleurs dans ce document (légitime ≠
+attaque). Remonter le seuil du préfiltre réduirait certains cas mais pas
+tous (deux des cinq restent bloqués même à 0.75) et n'a pas été re-vérifié
+sur le jeu d'attaques existant — laissé en l'état plutôt que changé à la
+hâte.
 
 #### Quelle variante est utilisée, et comment les comparer
 
-- `runner.py`, `victim_agent/orchestrator.py` et le benchmark utilisent `hybrid` par
-  défaut (composant externe, identifié comme tel ; si le préfiltre est
-  indisponible, le LLM juge seul comme `baseline`). `--guardian baseline` pour
-  n'utiliser que le LLM.
+- `runner.py`, `victim_agent/orchestrator.py` et le benchmark utilisent
+  `baseline` par défaut. `--guardian hybrid` pour ajouter le préfiltre
+  externe (si indisponible, le LLM juge seul comme `baseline`).
 - `--guardian contextual`, `--guardian hybrid`, ou une liste
   (`--guardian baseline,contextual`) choisissent d'autres variantes.
 - `--guardian all` lance les **trois** variantes, `hybrid` compris, pour les
-  comparer côte à côte sur les mêmes scénarios. C'est un mode de comparaison
-  explicite, pas le comportement par défaut.
+  comparer côte à côte sur les mêmes scénarios.
 - `benchmark/run_benchmark.py` accepte `baseline`, `contextual` et `hybrid`
   (`--sample-per-class 0` pour le jeu complet).
 
