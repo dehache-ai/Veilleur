@@ -172,7 +172,14 @@ def analyze_image_file(path: str, second_opinion: bool) -> dict:
     blur_verdict = detector.detect_manipulation(p, model, categories)
     verdict = blur_verdict
     description = ""
+    # `apply_second_opinion` n'appelle le LLM que si le flou n'a pas déjà bloqué ET que la
+    # confiance du classifieur est suffisante (mêmes conditions qu'en tête de cette fonction,
+    # côté detector.py) — sinon il renvoie le verdict du flou tel quel, sans jamais appeler le
+    # modèle. `llm_called` distingue ce cas pour que l'UI ne fasse pas croire à un second avis
+    # qui n'a pas eu lieu.
+    llm_called = False
     if second_opinion:
+        llm_called = blur_verdict.recommended_action != "block" and conf0 >= detector.MIN_CONFIDENCE
         verdict = detector.apply_second_opinion(p, blur_verdict, model, categories)
         if "« " in verdict.explanation and "Deuxième avis" in verdict.explanation:
             description = verdict.explanation.split("« ", 1)[1].split(" »", 1)[0]
@@ -184,7 +191,7 @@ def analyze_image_file(path: str, second_opinion: bool) -> dict:
         "blur_verdict": blur_verdict.to_dict(),
         "label": detector.french_label(label0), "conf": conf0,
         "label_blur": detector.french_label(label1), "conf_blur": conf1,
-        "second_opinion_used": second_opinion, "description": description, "replayed": False,
+        "second_opinion_used": second_opinion, "llm_called": llm_called, "description": description, "replayed": False,
     }
 
 

@@ -83,6 +83,7 @@
    "label_blur": "un piédestal",
    "conf_blur": 0.20871861279010773,
    "second_opinion_used": true,
+   "llm_called": false,
    "description": "",
    "replayed": false
   },
@@ -104,6 +105,7 @@
    "label_blur": "une fontaine",
    "conf_blur": 0.09898214042186737,
    "second_opinion_used": true,
+   "llm_called": false,
    "description": "",
    "replayed": false
   },
@@ -125,6 +127,7 @@
    "label_blur": "une voiture de sport",
    "conf_blur": 0.9966622591018677,
    "second_opinion_used": true,
+   "llm_called": true,
    "description": "L'image montre la Statue de la Liberté sur son socle, entourée d'eau et sous un ciel bleu parsemé de nuages.",
    "replayed": false
   },
@@ -146,6 +149,7 @@
    "label_blur": "un promontoire",
    "conf_blur": 0.155701145529747,
    "second_opinion_used": true,
+   "llm_called": true,
    "description": "",
    "replayed": false
   },
@@ -167,6 +171,7 @@
    "label_blur": "une orque",
    "conf_blur": 0.3540958762168884,
    "second_opinion_used": true,
+   "llm_called": false,
    "description": "",
    "replayed": false
   },
@@ -188,49 +193,8 @@
    "label_blur": "airliner",
    "conf_blur": 0.9992484450340271,
    "second_opinion_used": true,
+   "llm_called": true,
    "description": "L'image montre une vue aérienne d'une formation rocheuse en forme de croissant entourée par des eaux turquoise et une plage de sable.",
-   "replayed": false
-  },
-  "exemple_clean.png": {
-   "verdict": {
-    "risk_level": "nul",
-    "anomaly_type": "aucune",
-    "explanation": "La classification reste stable sous un léger flou. L'image reste reconnue comme un piédestal, la confiance passant de 22% à 21%. C'est cohérent avec une image authentique non manipulée.",
-    "recommended_action": "allow"
-   },
-   "blur_verdict": {
-    "risk_level": "nul",
-    "anomaly_type": "aucune",
-    "explanation": "La classification reste stable sous un léger flou. L'image reste reconnue comme un piédestal, la confiance passant de 22% à 21%. C'est cohérent avec une image authentique non manipulée.",
-    "recommended_action": "allow"
-   },
-   "label": "un piédestal",
-   "conf": 0.22284100949764252,
-   "label_blur": "un piédestal",
-   "conf_blur": 0.20871861279010773,
-   "second_opinion_used": true,
-   "description": "",
-   "replayed": false
-  },
-  "exemple_adversarial.png": {
-   "verdict": {
-    "risk_level": "élevé",
-    "anomaly_type": "perturbation_adverse_suspectee",
-    "explanation": "La classification change radicalement sous un léger flou. L'image était reconnue comme une voiture de sport, avec 100% de confiance. Après le flou, elle devient un phare, avec seulement 23% de confiance. Une vraie photo ne change pas de catégorie pour une transformation aussi légère : c'est la signature d'une perturbation adverse invisible ajoutée pour tromper un classifieur, pas d'un contenu authentique.",
-    "recommended_action": "block"
-   },
-   "blur_verdict": {
-    "risk_level": "élevé",
-    "anomaly_type": "perturbation_adverse_suspectee",
-    "explanation": "La classification change radicalement sous un léger flou. L'image était reconnue comme une voiture de sport, avec 100% de confiance. Après le flou, elle devient un phare, avec seulement 23% de confiance. Une vraie photo ne change pas de catégorie pour une transformation aussi légère : c'est la signature d'une perturbation adverse invisible ajoutée pour tromper un classifieur, pas d'un contenu authentique.",
-    "recommended_action": "block"
-   },
-   "label": "une voiture de sport",
-   "conf": 0.9999701976776123,
-   "label_blur": "un phare",
-   "conf_blur": 0.23242129385471344,
-   "second_opinion_used": true,
-   "description": "",
    "replayed": false
   }
  },

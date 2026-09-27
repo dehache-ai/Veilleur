@@ -212,11 +212,14 @@ def run_image(path: str | None, second: bool, voice: bool):
     # jugement LLM, apporté par le second avis — les deux sont montrés séparément plutôt que
     # fondus dans un seul verdict, pour que la part de chacun soit visible.
     blur_card = card(r["blur_verdict"], path="Test du flou (signal, sans LLM)", expected=expected, replayed=replayed, avis="Premier avis (déterministe)")
-    if r.get("second_opinion_used"):
-        second_card = card(r["verdict"], path="Modèle de vision + jugement LLM", expected=expected, replayed=replayed, avis="Second avis (LLM)")
-    else:
+    if not r.get("second_opinion_used"):
         second_card = ("<div class='note'>Deuxième avis (LLM) non exécuté sur cet essai — cochez la case pour l'inclure "
                         "(l'image part alors vers l'API OpenAI). Sans lui, seul le test déterministe a jugé.</div>")
+    elif not r.get("llm_called", True):
+        second_card = ("<div class='note'>Photo rejetée par les règles déterministes (test du flou) : pas d'appel au LLM, "
+                        "inutile puisque l'image est déjà bloquée sans lui.</div>")
+    else:
+        second_card = card(r["verdict"], path="Modèle de vision + jugement LLM", expected=expected, replayed=replayed, avis="Second avis (LLM)")
 
     lines = [
         f"<b>Classifieur d'images (resnet18)</b> : « {esc(r['label'])} » à {r['conf']:.0%}.",
