@@ -23,7 +23,7 @@ import gradio as gr
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import core  # noqa: E402
-from examples import IMAGE_EXAMPLES, MISSION, NETWORK_SCENARIOS, OTHER_SCENARIOS, TEXT_EXAMPLES, TOKEN_LEAK_TECHNIQUES  # noqa: E402
+from examples import IMAGE_EXAMPLES, MISSION, NETWORK_SCENARIOS, OTHER_SCENARIOS, TEXT_EXAMPLES, TOKEN_LEAK_TECHNIQUES, TOOL_STEPS, WEB_STEPS  # noqa: E402
 
 ROOT = core.ROOT
 FREE = "Saisie libre"
@@ -483,13 +483,14 @@ def build() -> gr.Blocks:
                         n_btn.click(lambda: gr.Button(interactive=False), None, n_btn) \
                             .then(functools.partial(run_scenario_by_key, NETWORK_SCENARIOS), [n_sel, n_voice, n_confirm], [n_log, n_res]) \
                             .then(lambda: gr.Button(interactive=True), None, n_btn)
-                    with gr.Tab("Outils, web, échanges entre agents"):
+                    with gr.Tab("Échanges entre agents (sessions complètes)"):
                         gr.Markdown(
-                            "Scénarios où l'agent (scripté — la séquence d'actions est écrite à l'avance dans la démo, "
-                            "pas décidée par un agent autonome) sort de sa mission : outil non prévu, page réservée, "
-                            "message qui transporte un secret. Chaque scénario mélange des décisions **sans LLM** (liste "
-                            "blanche, contrat de mission) et des décisions **avec LLM** (le juge tranche l'ambigu) — le "
-                            "détail est indiqué dans chacun, dépliez pour le voir. Une clé API est nécessaire pour la partie LLM."
+                            "Deux agents (scriptés — la séquence est écrite à l'avance dans la démo, pas décidée par un "
+                            "agent autonome) échangent des messages qui peuvent transporter un secret. Chaque scénario "
+                            "mélange des décisions **sans LLM** (marqueurs, données sensibles reconnues) et des décisions "
+                            "**avec LLM** (le juge tranche l'ambigu) — le détail est indiqué dans chacun, dépliez pour le "
+                            "voir. Pour tester une seule technique de déguisement isolément (plus rapide), voir l'onglet "
+                            "« Fuite d'un jeton ». Une clé API est nécessaire pour la partie LLM."
                         )
                         with gr.Group(elem_classes=["voice-box"]):
                             o_voice = gr.Checkbox(value=True, label="🔊 Voix sur détection (Gradium)",
@@ -511,10 +512,9 @@ def build() -> gr.Blocks:
                                 steps_sel.change(on_step_change, [steps_sel, segstate], step_view)
                     with gr.Tab("Fuite d'un jeton — une technique à la fois"):
                         gr.Markdown(
-                            "Le scénario « fuite d'un jeton » (onglet précédent) enchaîne 9 déguisements différents dans "
-                            "UNE session de 11 étapes — plusieurs minutes, difficile à suivre. Chaque déguisement part en "
-                            "fait du même point (l'agent A a lu le jeton) : voici les 7 techniques testées une par une, "
-                            "quelques secondes chacune."
+                            "Un scénario complet enchaînerait 9 déguisements différents dans UNE session de 11 étapes — "
+                            "plusieurs minutes, difficile à suivre. Chaque déguisement part en fait du même point "
+                            "(l'agent A a lu le jeton) : voici les 7 techniques testées une par une, quelques secondes chacune."
                         )
                         tk_choices = [(sc["title"], key) for key, sc in TOKEN_LEAK_TECHNIQUES.items()]
                         tk_sel = gr.Dropdown(tk_choices, value=tk_choices[0][1], label="Technique")
@@ -529,6 +529,42 @@ def build() -> gr.Blocks:
                         tk_btn.click(lambda: gr.Button(interactive=False), None, tk_btn) \
                             .then(functools.partial(run_scenario_by_key, TOKEN_LEAK_TECHNIQUES), [tk_sel, tk_voice], [tk_log, tk_res]) \
                             .then(lambda: gr.Button(interactive=True), None, tk_btn)
+                    with gr.Tab("Agent voyage — un test à la fois"):
+                        gr.Markdown(
+                            "L'ancien scénario enchaînait 4 étapes (recherche, avis piégé, avis normal, 3 tentatives "
+                            "d'outils) dans une seule démo de plusieurs minutes. Aucune ne dépend des autres : 6 tests "
+                            "indépendants et rapides à la place."
+                        )
+                        ts_choices = [(sc["title"], key) for key, sc in TOOL_STEPS.items()]
+                        ts_sel = gr.Dropdown(ts_choices, value=ts_choices[0][1], label="Test")
+                        ts_info = gr.Markdown(scenario_info(TOOL_STEPS[ts_choices[0][1]]))
+                        with gr.Group(elem_classes=["voice-box"]):
+                            ts_voice = gr.Checkbox(value=True, label="🔊 Voix sur détection (Gradium)", info="Local uniquement.")
+                        ts_btn = gr.Button("Lancer ce test", variant="primary")
+                        ts_res = gr.HTML()
+                        ts_log = gr.Textbox(label="Sortie", lines=6, max_lines=24, autoscroll=True, placeholder="La sortie s'affiche ici, en direct, après « Lancer ce test ».")
+                        ts_sel.change(lambda k: scenario_info(TOOL_STEPS[k]), ts_sel, ts_info)
+                        ts_btn.click(lambda: gr.Button(interactive=False), None, ts_btn) \
+                            .then(functools.partial(run_scenario_by_key, TOOL_STEPS), [ts_sel, ts_voice], [ts_log, ts_res]) \
+                            .then(lambda: gr.Button(interactive=True), None, ts_btn)
+                    with gr.Tab("Agent web — un test à la fois"):
+                        gr.Markdown(
+                            "L'ancien scénario enchaînait 6 requêtes dans une seule démo. Les 2 premières sont "
+                            "indépendantes ; les 4 dernières ne le sont PAS (chacune ajoute une violation jusqu'à la "
+                            "suspension de la session) et restent donc groupées dans un seul test « escalade »."
+                        )
+                        ws_choices = [(sc["title"], key) for key, sc in WEB_STEPS.items()]
+                        ws_sel = gr.Dropdown(ws_choices, value=ws_choices[0][1], label="Test")
+                        ws_info = gr.Markdown(scenario_info(WEB_STEPS[ws_choices[0][1]]))
+                        with gr.Group(elem_classes=["voice-box"]):
+                            ws_voice = gr.Checkbox(value=True, label="🔊 Voix sur détection (Gradium)", info="Local uniquement.")
+                        ws_btn = gr.Button("Lancer ce test", variant="primary")
+                        ws_res = gr.HTML()
+                        ws_log = gr.Textbox(label="Sortie", lines=6, max_lines=24, autoscroll=True, placeholder="La sortie s'affiche ici, en direct, après « Lancer ce test ».")
+                        ws_sel.change(lambda k: scenario_info(WEB_STEPS[k]), ws_sel, ws_info)
+                        ws_btn.click(lambda: gr.Button(interactive=False), None, ws_btn) \
+                            .then(functools.partial(run_scenario_by_key, WEB_STEPS), [ws_sel, ws_voice], [ws_log, ws_res]) \
+                            .then(lambda: gr.Button(interactive=True), None, ws_btn)
 
             with gr.Tab("Journal"):
                 gr.Markdown("### Un seul contrat, un seul journal\nTous les piliers produisent le même verdict et l'écrivent au même endroit.")
