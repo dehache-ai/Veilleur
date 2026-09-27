@@ -53,6 +53,9 @@ CSS = """
 .jt td.act {font-weight: 700; white-space: nowrap;}
 .jt td.act.ok {color: #2e9e5b;} .jt td.act.no {color: #d64545;} .jt td.act.ask {color: #b9791a;}
 .banner {padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border-color-primary); margin: 4px 0 10px 0;}
+.voice-box {border: 1px solid #7c5cbf; border-radius: 8px; padding: 6px 12px; margin: 4px 0 10px 0;
+            background: rgba(124,92,191,.10);}
+.caption-box {border: 1px dashed var(--border-color-primary); border-radius: 8px; padding: 10px 14px; margin: 8px 0;}
 """
 
 
@@ -164,10 +167,27 @@ def image_caption(path: str) -> tuple[str, str]:
     return "", ""
 
 
-def run_image(path: str | None, second: bool):
+PLACEHOLDER_VERDICT = "<div class='note'>Cliquez sur « Analyser » pour voir le verdict de Veilleur.</div>"
+
+
+def on_image_selected(path: str | None):
+    """Se déclenche à la sélection (exemple ou dépôt) : dit ce qu'est l'image AVANT toute
+    analyse, sans jamais lancer le gardien — le verdict n'apparaît qu'au clic sur « Analyser »."""
+    if not path:
+        return "", "<div class='banner'>Choisissez un exemple ou déposez une image.</div>", ""
+    cap, expected = image_caption(path)
+    if not cap:
+        caption_html = "<div class='caption-box'>Image personnalisée : nous ne savons pas si elle est truquée ou authentique avant analyse.</div>"
+    else:
+        truth = "authentique" if expected == "allow" else "truquée"
+        caption_html = f"<div class='caption-box'><b>{esc(cap)}</b> — cette image est en réalité <b>{truth}</b>.</div>"
+    return caption_html, PLACEHOLDER_VERDICT, ""
+
+
+def run_image(path: str | None, second: bool, voice: bool):
     if not path:
         return "<div class='banner'>Choisissez un exemple ou déposez une image.</div>", ""
-    cap, expected = image_caption(path)
+    _, expected = image_caption(path)
     rec = core.recorded().get("image", {}).get(Path(path).name)
     if rec and not core.live_mode():
         r, replayed = rec, True
@@ -176,17 +196,32 @@ def run_image(path: str | None, second: bool):
             r, replayed = core.analyze_image_file(path, second and core.live_mode()), False
         except Exception as exc:
             return f"<div class='banner'>Analyse impossible ({esc(type(exc).__name__)} : {esc(str(exc)[:200])}).</div>", ""
+
+    # Double résultat : le test du flou est déterministe (aucun LLM) ; le hackathon demande un
+    # jugement LLM, apporté par le second avis — les deux sont montrés séparément plutôt que
+    # fondus dans un seul verdict, pour que la part de chacun soit visible.
+    blur_card = card(r["blur_verdict"], path="Test du flou — déterministe, sans LLM", expected=expected, replayed=replayed)
+    if r.get("second_opinion_used"):
+        second_card = card(r["verdict"], path="Deuxième avis — modèle de vision + LLM", expected=expected, replayed=replayed)
+    else:
+        second_card = ("<div class='note'>Deuxième avis (LLM) non exécuté sur cet essai — cochez la case pour l'inclure "
+                        "(l'image part alors vers l'API OpenAI). Sans lui, seul le test déterministe a jugé.</div>")
+
     lines = [
         f"<b>Classifieur d'images (resnet18)</b> : « {esc(r['label'])} » à {r['conf']:.0%}.",
         f"<b>Après un léger flou</b> : « {esc(r['label_blur'])} » à {r['conf_blur']:.0%}.",
-        "<b>Test du flou seul</b> : " + ACTION_LABEL[r["blur_verdict"]["recommended_action"]].lower() + ".",
     ]
     if r.get("description"):
         lines.append(f"<b>Deuxième avis (modèle de vision)</b> décrit : « {esc(r['description'])} ».")
-    elif not r.get("second_opinion_used", True) and not replayed:
-        lines.append("<b>Deuxième avis</b> : non utilisé (il enverrait l'image à l'API OpenAI).")
     detail = "<div class='note'>" + "<br>".join(lines) + "</div>"
-    return card(r["verdict"], expected=expected, replayed=replayed), detail
+
+    # La voix se déclenche si L'UN OU L'AUTRE des deux résultats signale une image truquée
+    # (le second avis ne peut qu'aggraver le verdict du flou, jamais l'adoucir — voir
+    # apply_second_opinion — donc en pratique le verdict final suffit, mais on vérifie les
+    # deux explicitement pour rester correct si cette règle changeait).
+    worst = r["verdict"] if r["verdict"]["recommended_action"] != "allow" else r["blur_verdict"]
+    voice_note = voice_html(worst, voice) if worst["recommended_action"] != "allow" else ""
+    return blur_card + second_card + voice_note, detail
 
 
 # ── Pilier 3 ─────────────────────────────────────────────────────────────────────────────
@@ -295,8 +330,9 @@ def build() -> gr.Blocks:
                         )
                         go = gr.Button("Analyser", variant="primary")
                     with gr.Column(scale=5):
-                        voice = gr.Checkbox(value=False, label="Voix sur détection (Gradium)",
-                                             info="Joue à voix haute le verdict si Veilleur bloque ou demande confirmation — comme la démo en ligne de commande. Ne marche que si vous lancez cette UI en local (le son joue sur cette machine).")
+                        with gr.Group(elem_classes=["voice-box"]):
+                            voice = gr.Checkbox(value=False, label="🔊 Voix sur détection (Gradium)",
+                                                 info="Joue à voix haute le verdict si Veilleur bloque ou demande confirmation — comme la démo en ligne de commande. Ne marche que si vous lancez cette UI en local (le son joue sur cette machine).")
                         out = gr.HTML(label="Verdict")
                         seen = gr.HTML()
                 sel.change(on_text_example, sel, [request, content, why])
@@ -305,22 +341,28 @@ def build() -> gr.Blocks:
             with gr.Tab("2 · Image", id="t_image"):
                 gr.Markdown(
                     "### Cette image est-elle truquée ?\nUne perturbation invisible peut faire prendre une statue pour une voiture de sport. "
-                    "Choisissez un exemple ou déposez une image (elle reste sur cette machine, sauf si vous cochez le deuxième avis)."
+                    "Choisissez un des 8 exemples testés ou déposez votre propre image (elle reste sur cette machine, sauf si vous cochez le "
+                    "deuxième avis). La sélection dit ce qu'est l'image ; Veilleur ne se prononce qu'après « Analyser »."
                 )
                 with gr.Row():
                     with gr.Column(scale=5):
                         img = gr.Image(type="filepath", label="Image", height=320, sources=["upload"])
                         ex_img = gr.Examples(
                             examples=[[str(ROOT / p)] for p, _, _ in IMAGE_EXAMPLES],
-                            inputs=[img], example_labels=[c for _, c, _ in IMAGE_EXAMPLES], label="Exemples testés (un clic lance l'analyse)", examples_per_page=8,
+                            inputs=[img], example_labels=[c for _, c, _ in IMAGE_EXAMPLES], label="Les 8 exemples testés (cliquez pour choisir)", examples_per_page=8,
                         )
-                        second = gr.Checkbox(value=core.live_mode(), label="Deuxième avis (envoie l'image à l'API OpenAI)", interactive=core.live_mode())
+                        cap_html = gr.HTML()
+                        second = gr.Checkbox(value=core.live_mode(), label="Deuxième avis — LLM de vision (envoie l'image à l'API OpenAI)", interactive=core.live_mode())
                         goi = gr.Button("Analyser", variant="primary")
                     with gr.Column(scale=5):
+                        with gr.Group(elem_classes=["voice-box"]):
+                            voicei = gr.Checkbox(value=False, label="🔊 Voix sur détection (Gradium)",
+                                                  info="Joue à voix haute dès que l'un des deux résultats signale une image truquée. Local uniquement.")
                         outi = gr.HTML("<div class='note'>Le verdict s'affichera ici : cliquez sur un exemple ou déposez une image, puis « Analyser ».</div>")
                         detail = gr.HTML()
-                goi.click(run_image, [img, second], [outi, detail])
-                ex_img.load_input_event.then(run_image, [img, second], [outi, detail])
+                goi.click(run_image, [img, second, voicei], [outi, detail])
+                ex_img.load_input_event.then(on_image_selected, img, [cap_html, outi, detail])
+                img.upload(on_image_selected, img, [cap_html, outi, detail])
 
             with gr.Tab("3 · Comportement d'agent", id="t_agent"):
                 gr.Markdown("### L'agent reste-t-il dans son périmètre ?\nChaque bouton lance le vrai scénario, dans un process séparé, avec la sortie en direct.")
@@ -354,7 +396,9 @@ def build() -> gr.Blocks:
         b_text.click(lambda: (gr.Tabs(selected="t_texte"), trap["title"], trap["request"], trap["content"], f"**Ce que ce cas teste.** {trap['why']}"),
                      None, [tabs, sel, request, content, why]).then(run_text, [sel, request, content, guardian, voice], [out, seen])
         fake = str(ROOT / next(p for p, _, exp in IMAGE_EXAMPLES if exp == "block"))
-        b_img.click(lambda: (gr.Tabs(selected="t_image"), fake), None, [tabs, img]).then(run_image, [img, second], [outi, detail])
+        b_img.click(lambda: (gr.Tabs(selected="t_image"), fake), None, [tabs, img]) \
+            .then(on_image_selected, img, [cap_html, outi, detail]) \
+            .then(run_image, [img, second, voicei], [outi, detail])
         b_agent.click(lambda: gr.Tabs(selected="t_agent"), None, tabs)
     return demo
 
