@@ -197,38 +197,12 @@ silencieusement aux gardiens 100 % LLM. Le verdict cite le modèle et sa
 licence.
 
 `hybrid` a été le gardien par défaut jusqu'au 2026-09-27, puis repassé à
-`baseline` après mesure de faux positifs sur de vraies données (voir
-ci-dessous) : `hybrid` reste une **option** explicite, pour montrer le
-composant externe (le règlement du hackathon demande de l'identifier
-clairement), mais n'est plus utilisé sans le demander.
-
-##### Mesure sur de vraies réponses (pas des textes écrits par nous)
-
-Tous les jeux ci-dessus (`travel_eval.jsonl`, raucle-bench) sont des textes
-que nous avons rédigés ou sélectionnés. Le 2026-09-27, pour sortir de ce
-biais, 25 vraies réponses de l'outil `hotel_search` de Jinko (production,
-25 destinations/dates variées, contenu que nous n'avons pas écrit) ont été
-jugées par `hybrid` puis par `baseline` (`benchmark/jinko_real_eval.py`,
-privé — contient de vraies réponses tierces) :
-
-| Gardien | Faux positifs (sur du contenu légitime) |
-|---|---|
-| `hybrid` | 6/25 (24 %) |
-| `baseline` | 1/24 (4 %, un appel Jinko en erreur réseau exclu) |
-
-Sur `hybrid`, 5 des 6 faux positifs viennent du préfiltre externe
-(`NeuralTrust/prompt-guard-oss-small`), qui bloque des listes d'hôtels tout à
-fait normales (prix, notes, nombre d'avis) avec des scores « jailbreak » de
-0.50 à 0.84 (seuil : 0.5) — un modèle apparemment mal calibré sur du texte
-dense/structuré de ce type, plutôt que sur des messages de chat. Le 6e (les
-deux gardiens le partagent) vient du LLM lui-même réagissant à un message
-d'erreur renvoyé par Jinko (paramètres de recherche invalides) plutôt qu'à
-une vraie attaque — défendable en soi, mais compté comme faux positif selon
-la définition utilisée partout ailleurs dans ce document (légitime ≠
-attaque). Remonter le seuil du préfiltre réduirait certains cas mais pas
-tous (deux des cinq restent bloqués même à 0.75) et n'a pas été re-vérifié
-sur le jeu d'attaques existant — laissé en l'état plutôt que changé à la
-hâte.
+`baseline` après mesure de faux positifs sur de vraies données (25 vraies
+réponses Jinko, pas des textes écrits par nous) : `hybrid` reste une
+**option** explicite, pour montrer le composant externe (le règlement du
+hackathon demande de l'identifier clairement), mais n'est plus utilisé sans
+le demander. Détail de cette mesure : section « Ce qui a été mesuré »,
+point 6.
 
 #### Quelle variante est utilisée, et comment les comparer
 
@@ -423,6 +397,45 @@ Avec ce prétraitement, `baseline` et `hybrid` sont à égalité sur tous les
 indicateurs : `hybrid` n'a plus d'avantage de détection sur ce benchmark, seulement
 un avantage de vitesse sur les attaques évidentes.
 
+### 6. Vraies réponses Jinko : `hybrid` contre `baseline` (2026-09-27)
+
+Tous les jeux ci-dessus (`travel_eval.jsonl`, raucle-bench) sont des textes
+que nous avons rédigés ou sélectionnés. Pour sortir de ce biais, 25 vraies
+réponses de l'outil `hotel_search` de Jinko (production, 25
+destinations/dates variées, contenu que nous n'avons pas écrit) ont été
+jugées par `hybrid` puis par `baseline` (`benchmark/jinko_real_eval.py`,
+privé — contient de vraies réponses tierces) :
+
+| Gardien | Faux positifs (sur du contenu légitime) |
+|---|---|
+| `hybrid` | 6/25 (24 %) |
+| `baseline` | 1/24 (4 %, un appel Jinko en erreur réseau exclu) |
+
+Sur `hybrid`, 5 des 6 faux positifs viennent du préfiltre externe
+(`NeuralTrust/prompt-guard-oss-small`), qui bloque des listes d'hôtels tout à
+fait normales (prix, notes, nombre d'avis) avec des scores « jailbreak » de
+0.50 à 0.84 (seuil : 0.5) — un modèle apparemment mal calibré sur du texte
+dense/structuré de ce type, plutôt que sur des messages de chat. Le 6e cas
+(les deux gardiens le partagent) vient du LLM lui-même réagissant à un
+message d'erreur renvoyé par Jinko (paramètres de recherche invalides)
+plutôt qu'à une vraie attaque — défendable en soi, mais compté comme faux
+positif selon la définition utilisée partout ailleurs dans ce document
+(légitime ≠ attaque).
+
+Remonter le seuil du préfiltre réduirait certains cas mais pas tous (deux
+des cinq restent bloqués même à 0.75) et n'a pas été re-vérifié sur le jeu
+d'attaques existant — laissé en l'état plutôt que changé à la hâte. C'est
+cette mesure qui a fait repasser le gardien par défaut de `hybrid` à
+`baseline` le même jour (voir plus haut, sous-section `hybrid`) : le pipe LLM
+des deux variantes est identique (`hybrid` réutilise le pipe `baseline`),
+donc l'écart de faux positifs vient entièrement du préfiltre externe, pas
+d'une meilleure décision du LLM.
+
+**Réserve** : un seul jeu de 25 requêtes, sur un seul type de contenu
+(listes d'hôtels). Comme partout ailleurs dans ce document, ce chiffre est à
+lire comme un signal net (l'écart est de 6x), pas comme une mesure de
+précision.
+
 ## Confirmation vocale : le flux `ask_user`
 
 Quand le gardien répond `ask_user`, c'est à l'utilisateur de trancher. Le flux est
@@ -494,7 +507,7 @@ Le pilier est aussi évalué sur un benchmark public tiers
 ## Utilisation
 
 ```bash
-# Rejouer les scénarios avec le gardien par défaut (hybrid)
+# Rejouer les scénarios avec le gardien par défaut (baseline)
 python runner.py
 
 # Choisir une ou plusieurs variantes, ou comparer les 3 (hybrid compris)
