@@ -115,10 +115,14 @@ def find_text_example(title: str) -> dict | None:
 
 
 def on_text_example(title: str):
+    """Se déclenche à la sélection d'un cas (dropdown ou raccourci « un clic ») : remplit les
+    champs SANS jamais lancer le gardien — comme `on_image_selected` pour le pilier image, le
+    verdict n'apparaît qu'au clic sur « Analyser », et l'ancien verdict affiché est effacé plutôt
+    que laissé visible pour un cas qui n'est plus celui sélectionné."""
     ex = find_text_example(title)
     if ex is None:
-        return gr.update(), gr.update(), "Écrivez votre propre contenu : une réponse d'outil que l'agent est sur le point de lire."
-    return ex["request"], ex["content"], f"**Ce que ce cas teste.** {ex['why']}"
+        return gr.update(), gr.update(), "Écrivez votre propre contenu : une réponse d'outil que l'agent est sur le point de lire.", PLACEHOLDER_VERDICT, ""
+    return ex["request"], ex["content"], f"**Ce que ce cas teste.** {ex['why']}", PLACEHOLDER_VERDICT, ""
 
 
 def preview_html(preview: dict) -> str:
@@ -331,6 +335,22 @@ def on_step_change(title: str, segments: list) -> str:
     return next((step_html(body) for t, body in segments if t == title), "")
 
 
+def reset_scenario_view(scenarios: dict, key: str):
+    """Appelé quand la liste déroulante de scénario change (onglet « Échanges entre
+    agents », widgets partagés entre scénarios) : la description doit se mettre à jour
+    immédiatement, mais le log/résultat/étapes affichés appartiennent encore à l'ancien
+    scénario tant qu'on n'a pas relancé — on les vide plutôt que de laisser un état
+    trompeur (étapes ou verdict d'un scénario différent de celui décrit au-dessus)."""
+    return (
+        scenario_info(scenarios[key]),
+        gr.Dropdown(choices=[], value=None, visible=False),
+        "",
+        [],
+        "",
+        "",
+    )
+
+
 def run_scenario_by_key(scenarios: dict, key: str, voice: bool, confirm_mode: str | None = None):
     """Comme `make_scenario_runner`, mais `key` (et `voice`) sont lus au moment du clic (depuis
     une liste déroulante et une case à cocher) plutôt que figés à la construction de l'UI — pour
@@ -424,9 +444,9 @@ def build() -> gr.Blocks:
                         with gr.Group(elem_classes=["voice-box"]):
                             voice = gr.Checkbox(value=True, label="🔊 Voix sur détection (Gradium)",
                                                  info="Joue à voix haute le verdict si Veilleur bloque ou demande confirmation — comme la démo en ligne de commande. Ne marche que si vous lancez cette UI en local (le son joue sur cette machine).")
-                        out = gr.HTML(label="Verdict")
+                        out = gr.HTML(PLACEHOLDER_VERDICT, label="Verdict")
                         seen = gr.HTML()
-                sel.change(on_text_example, sel, [request, content, why])
+                sel.change(on_text_example, sel, [request, content, why, out, seen])
                 go.click(lambda: gr.Button(interactive=False), None, go) \
                     .then(run_text, [sel, request, content, guardian, voice], [out, seen]) \
                     .then(lambda: gr.Button(interactive=True), None, go)
@@ -499,13 +519,14 @@ def build() -> gr.Blocks:
                             o_voice = gr.Checkbox(value=True, label="🔊 Voix sur détection (Gradium)",
                                                    info="Le sous-process narre lui-même à voix haute quand un gardien bloque ou demande confirmation. Local uniquement.")
                         oa_btn = gr.Button("Lancer ce scénario", variant="primary")
-                        oa_res = gr.HTML(visible=False)
+                        oa_res = gr.HTML()
                         oa_segstate = gr.State([])
                         oa_steps_sel = gr.Dropdown(label="Étapes du scénario (apparaît une fois TERMINÉ — patientez, ça peut prendre 1-2 minutes)", choices=[], visible=False)
                         oa_step_view = gr.HTML()
                         with gr.Accordion("Sortie en direct, pendant l'exécution (déroulez pour suivre la progression en attendant)", open=True):
                             oa_log = gr.Textbox(show_label=False, lines=6, max_lines=30, autoscroll=True, placeholder="La sortie s'affiche ici, en direct, après « Lancer ce scénario ».")
-                        oa_sel.change(lambda k: scenario_info(OTHER_SCENARIOS[k]), oa_sel, oa_info)
+                        oa_sel.change(functools.partial(reset_scenario_view, OTHER_SCENARIOS), oa_sel,
+                                      [oa_info, oa_steps_sel, oa_step_view, oa_segstate, oa_log, oa_res])
                         oa_btn.click(lambda: gr.Button(interactive=False), None, oa_btn) \
                             .then(functools.partial(run_scenario_by_key, OTHER_SCENARIOS), [oa_sel, o_voice], [oa_log, oa_res]) \
                             .then(populate_steps, oa_log, [oa_steps_sel, oa_step_view, oa_segstate]) \
@@ -572,20 +593,17 @@ def build() -> gr.Blocks:
                 table = gr.HTML(value=journal)
                 gr.Button("Actualiser").click(journal, None, table)
 
-        # boutons de la vue d'ensemble : on va à l'onglet, l'exemple est prêt et l'analyse est lancée.
-        # Le bouton "un clic" ET le bouton "Analyser" de l'onglet visé sont désactivés pendant le
-        # traitement (modèle + éventuellement LLM + voix, plusieurs secondes) : sans ça, un second
-        # clic pendant que le premier tourne encore se met en file et relance toute l'analyse une
-        # deuxième fois (observé en test : deux verdicts et deux narrations, ~36 s d'écart).
+        # boutons de la vue d'ensemble : on va à l'onglet et l'exemple piégé est prêt à analyser —
+        # SANS lancer l'analyse. Text et image se comportent maintenant pareil (et pareil qu'un
+        # clic manuel sur un exemple dans leur propre onglet) : le verdict n'apparaît qu'au clic
+        # sur « Analyser », jamais tout seul. Avant cette correction, le bouton texte lançait
+        # l'analyse dans la même chaîne de clic — un utilisateur arrivant sur l'onglet Texte
+        # voyait donc déjà un verdict sans avoir rien cliqué d'autre.
         trap = next(e for e in TEXT_EXAMPLES.values() if e["expected"] == "block")
-        b_text.click(lambda: (gr.Tabs(selected="t_texte"), trap["title"], trap["request"], trap["content"], f"**Ce que ce cas teste.** {trap['why']}", gr.Button(interactive=False)),
-                     None, [tabs, sel, request, content, why, go]) \
-            .then(run_text, [sel, request, content, guardian, voice], [out, seen]) \
-            .then(lambda: gr.Button(interactive=True), None, go)
+        b_text.click(lambda: (gr.Tabs(selected="t_texte"), trap["title"], trap["request"], trap["content"],
+                               f"**Ce que ce cas teste.** {trap['why']}", PLACEHOLDER_VERDICT, ""),
+                     None, [tabs, sel, request, content, why, out, seen])
         fake = str(ROOT / next(p for p, _, exp in IMAGE_EXAMPLES if exp == "block"))
-        # "Essayer en un clic" ne fait que sélectionner l'exemple truqué et afficher sa légende —
-        # exactement comme un clic manuel sur un exemple — SANS lancer l'analyse : le verdict ne
-        # doit apparaître qu'au clic sur « Analyser », ici comme ailleurs dans ce pilier.
         b_img.click(lambda: (gr.Tabs(selected="t_image"), fake), None, [tabs, img]) \
             .then(on_image_selected, img, [cap_html, outi, detail])
         b_agent.click(lambda: gr.Tabs(selected="t_agent"), None, tabs)
