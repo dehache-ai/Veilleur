@@ -23,7 +23,7 @@ import gradio as gr
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import core  # noqa: E402
-from examples import IMAGE_EXAMPLES, MISSION, NETWORK_SCENARIOS, OTHER_SCENARIOS, TEXT_EXAMPLES  # noqa: E402
+from examples import IMAGE_EXAMPLES, MISSION, NETWORK_SCENARIOS, OTHER_SCENARIOS, TEXT_EXAMPLES, TOKEN_LEAK_TECHNIQUES  # noqa: E402
 
 ROOT = core.ROOT
 FREE = "Saisie libre"
@@ -509,6 +509,26 @@ def build() -> gr.Blocks:
                                     .then(populate_steps, log, [steps_sel, step_view, segstate]) \
                                     .then(lambda: gr.Button(interactive=True), None, btn)
                                 steps_sel.change(on_step_change, [steps_sel, segstate], step_view)
+                    with gr.Tab("Fuite d'un jeton — une technique à la fois"):
+                        gr.Markdown(
+                            "Le scénario « fuite d'un jeton » (onglet précédent) enchaîne 9 déguisements différents dans "
+                            "UNE session de 11 étapes — plusieurs minutes, difficile à suivre. Chaque déguisement part en "
+                            "fait du même point (l'agent A a lu le jeton) : voici les 7 techniques testées une par une, "
+                            "quelques secondes chacune."
+                        )
+                        tk_choices = [(sc["title"], key) for key, sc in TOKEN_LEAK_TECHNIQUES.items()]
+                        tk_sel = gr.Dropdown(tk_choices, value=tk_choices[0][1], label="Technique")
+                        tk_info = gr.Markdown(scenario_info(TOKEN_LEAK_TECHNIQUES[tk_choices[0][1]]))
+                        with gr.Group(elem_classes=["voice-box"]):
+                            tk_voice = gr.Checkbox(value=True, label="🔊 Voix sur détection (Gradium)",
+                                                    info="Local uniquement.")
+                        tk_btn = gr.Button("Lancer ce test", variant="primary")
+                        tk_res = gr.HTML()
+                        tk_log = gr.Textbox(label="Sortie", lines=6, max_lines=24, autoscroll=True, placeholder="La sortie s'affiche ici, en direct, après « Lancer ce test ».")
+                        tk_sel.change(lambda k: scenario_info(TOKEN_LEAK_TECHNIQUES[k]), tk_sel, tk_info)
+                        tk_btn.click(lambda: gr.Button(interactive=False), None, tk_btn) \
+                            .then(functools.partial(run_scenario_by_key, TOKEN_LEAK_TECHNIQUES), [tk_sel, tk_voice], [tk_log, tk_res]) \
+                            .then(lambda: gr.Button(interactive=True), None, tk_btn)
 
             with gr.Tab("Journal"):
                 gr.Markdown("### Un seul contrat, un seul journal\nTous les piliers produisent le même verdict et l'écrivent au même endroit.")
