@@ -1,0 +1,26 @@
+# Généré par tools/export_public.py. Rien de sensible ne doit être ajouté à ce dépôt.
+.env
+.env.*
+!.env.example
+*.env
+/results/
+.venv/
+venv/
+.gradio/
+*.log
+*.wav
+.pipelex/
+.claude/
+__pycache__/
+*.pyc
+raucle-bench-src/
+calibration_images/
+scenarios/
+benchmark/*.jsonl
+benchmark/results/*.json
+adversarial_vision/input/
+adversarial_vision/output/
+adversarial_vision/generate_*.py
+adversarial_vision/calibrate_*.py
+adversarial_vision/make_presentation_set.py
+adversarial_vision/vlm_experiment.py
