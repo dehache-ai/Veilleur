@@ -80,11 +80,8 @@ def card(verdict: dict, *, path: str = "", expected: str = "", replayed: bool = 
 def banner() -> str:
     if core.live_mode():
         backend = core.current_backend()
-        detail = {
-            "openai": "LLM externe (OpenAI, votre clé) : quelques centimes par essai.",
-            "ollama": "LLM local (Ollama) : gratuit, mais plus lent.",
-        }.get(backend, "LLM externe ou local selon votre configuration (<code>python switch_backend.py --status</code> pour vérifier).")
-        return f'<div class="banner">Mode <b>direct</b> : les gardiens LLM sont réellement appelés. {detail}</div>'
+        label = {"openai": "LLM externe (OpenAI)", "ollama": "LLM local (Ollama)"}.get(backend, "LLM externe ou local (config inconnue)")
+        return f'<div class="banner">Mode : <b>{label}</b></div>'
     return (
         '<div class="banner">Mode <b>démonstration</b> : aucune clé API détectée, donc les cas proposés affichent le résultat <b>enregistré</b> lors de nos essais ; '
         "les couches déterministes tournent en direct. Pour tout essayer en direct, ajoutez <code>OPENAI_API_KEY</code> dans <code>.env</code> "
@@ -296,10 +293,10 @@ def build() -> gr.Blocks:
                                  "composant tiers) · contextual = LLM en deux étapes (mesuré moins bon aussi : 70 % de "
                                  "faux positifs sur le benchmark public, latence doublée)",
                         )
-                        voice = gr.Checkbox(value=False, label="Voix sur détection (Gradium)",
-                                             info="Joue à voix haute le verdict si Veilleur bloque ou demande confirmation — comme la démo en ligne de commande. Ne marche que si vous lancez cette UI en local (le son joue sur cette machine).")
                         go = gr.Button("Analyser", variant="primary")
                     with gr.Column(scale=5):
+                        voice = gr.Checkbox(value=False, label="Voix sur détection (Gradium)",
+                                             info="Joue à voix haute le verdict si Veilleur bloque ou demande confirmation — comme la démo en ligne de commande. Ne marche que si vous lancez cette UI en local (le son joue sur cette machine).")
                         out = gr.HTML(label="Verdict")
                         seen = gr.HTML()
                 sel.change(on_text_example, sel, [request, content, why])
