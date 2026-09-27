@@ -463,7 +463,7 @@ def build() -> gr.Blocks:
             with gr.Tab("3 · Comportement d'agent", id="t_agent"):
                 gr.Markdown("### L'agent reste-t-il dans son périmètre ?\nChaque bouton lance le vrai scénario, dans un process séparé, avec la sortie en direct.")
                 with gr.Tabs():
-                    with gr.Tab("Agent sur le réseau"):
+                    with gr.Tab("Agents sur le réseau"):
                         gr.Markdown("Un agent simulé (process distinct) ouvre des connexions **locales** ; le moniteur les observe de l'extérieur. Rien ne sort de votre machine. Choisissez un scénario, regardez s'il appelle un LLM avant de le lancer, puis comparez.")
                         n_choices = [(f"{'⚠️ anormal' if sc['kind'] == 'anormal' else '✅ normal'} — {sc['title']}", key) for key, sc in NETWORK_SCENARIOS.items()]
                         n_sel = gr.Dropdown(n_choices, value=n_choices[0][1], label="Scénario")
@@ -483,7 +483,7 @@ def build() -> gr.Blocks:
                         n_btn.click(lambda: gr.Button(interactive=False), None, n_btn) \
                             .then(functools.partial(run_scenario_by_key, NETWORK_SCENARIOS), [n_sel, n_voice, n_confirm], [n_log, n_res]) \
                             .then(lambda: gr.Button(interactive=True), None, n_btn)
-                    with gr.Tab("Échanges entre agents (sessions complètes)"):
+                    with gr.Tab("Échanges entre agents"):
                         gr.Markdown(
                             "Deux agents (scriptés — la séquence est écrite à l'avance dans la démo, pas décidée par un "
                             "agent autonome) échangent des messages qui peuvent transporter un secret. Chaque scénario "
@@ -492,25 +492,26 @@ def build() -> gr.Blocks:
                             "voir. Pour tester une seule technique de déguisement isolément (plus rapide), voir l'onglet "
                             "« Fuite d'un jeton ». Une clé API est nécessaire pour la partie LLM."
                         )
+                        oa_choices = [(sc["title"], key) for key, sc in OTHER_SCENARIOS.items()]
+                        oa_sel = gr.Dropdown(oa_choices, value=oa_choices[0][1], label="Scénario")
+                        oa_info = gr.Markdown(scenario_info(OTHER_SCENARIOS[oa_choices[0][1]]))
                         with gr.Group(elem_classes=["voice-box"]):
                             o_voice = gr.Checkbox(value=True, label="🔊 Voix sur détection (Gradium)",
-                                                   info="Chaque sous-process narre lui-même à voix haute quand un gardien bloque ou demande confirmation. Local uniquement.")
-                        for key, sc in OTHER_SCENARIOS.items():
-                            with gr.Accordion(sc["title"], open=False):
-                                gr.Markdown(scenario_info(sc))
-                                btn = gr.Button("Lancer ce scénario")
-                                res = gr.HTML(visible=False)
-                                segstate = gr.State([])
-                                steps_sel = gr.Dropdown(label="Étapes du scénario (apparaît une fois le scénario TERMINÉ — patientez, certains prennent plusieurs minutes)", choices=[], visible=False)
-                                step_view = gr.HTML()
-                                with gr.Accordion("Sortie en direct, pendant l'exécution (déroulez pour suivre la progression en attendant)", open=True):
-                                    log = gr.Textbox(show_label=False, lines=6, max_lines=30, autoscroll=True, placeholder="La sortie s'affiche ici, en direct, après « Lancer ce scénario ». Les scénarios à plusieurs échanges (ex. « fuite d'un jeton ») appellent le LLM plusieurs fois de suite et peuvent prendre 2-3 minutes.")
-                                btn.click(lambda: gr.Button(interactive=False), None, btn) \
-                                    .then(functools.partial(run_scenario_by_key, OTHER_SCENARIOS, key), o_voice, [log, res]) \
-                                    .then(populate_steps, log, [steps_sel, step_view, segstate]) \
-                                    .then(lambda: gr.Button(interactive=True), None, btn)
-                                steps_sel.change(on_step_change, [steps_sel, segstate], step_view)
-                    with gr.Tab("Fuite d'un jeton — une technique à la fois"):
+                                                   info="Le sous-process narre lui-même à voix haute quand un gardien bloque ou demande confirmation. Local uniquement.")
+                        oa_btn = gr.Button("Lancer ce scénario", variant="primary")
+                        oa_res = gr.HTML(visible=False)
+                        oa_segstate = gr.State([])
+                        oa_steps_sel = gr.Dropdown(label="Étapes du scénario (apparaît une fois TERMINÉ — patientez, ça peut prendre 1-2 minutes)", choices=[], visible=False)
+                        oa_step_view = gr.HTML()
+                        with gr.Accordion("Sortie en direct, pendant l'exécution (déroulez pour suivre la progression en attendant)", open=True):
+                            oa_log = gr.Textbox(show_label=False, lines=6, max_lines=30, autoscroll=True, placeholder="La sortie s'affiche ici, en direct, après « Lancer ce scénario ».")
+                        oa_sel.change(lambda k: scenario_info(OTHER_SCENARIOS[k]), oa_sel, oa_info)
+                        oa_btn.click(lambda: gr.Button(interactive=False), None, oa_btn) \
+                            .then(functools.partial(run_scenario_by_key, OTHER_SCENARIOS), [oa_sel, o_voice], [oa_log, oa_res]) \
+                            .then(populate_steps, oa_log, [oa_steps_sel, oa_step_view, oa_segstate]) \
+                            .then(lambda: gr.Button(interactive=True), None, oa_btn)
+                        oa_steps_sel.change(on_step_change, [oa_steps_sel, oa_segstate], oa_step_view)
+                    with gr.Tab("Fuite d'un jeton"):
                         gr.Markdown(
                             "Un scénario complet enchaînerait 9 déguisements différents dans UNE session de 11 étapes — "
                             "plusieurs minutes, difficile à suivre. Chaque déguisement part en fait du même point "
@@ -529,7 +530,7 @@ def build() -> gr.Blocks:
                         tk_btn.click(lambda: gr.Button(interactive=False), None, tk_btn) \
                             .then(functools.partial(run_scenario_by_key, TOKEN_LEAK_TECHNIQUES), [tk_sel, tk_voice], [tk_log, tk_res]) \
                             .then(lambda: gr.Button(interactive=True), None, tk_btn)
-                    with gr.Tab("Agent voyage — un test à la fois"):
+                    with gr.Tab("Agent de voyage"):
                         gr.Markdown(
                             "L'ancien scénario enchaînait 4 étapes (recherche, avis piégé, avis normal, 3 tentatives "
                             "d'outils) dans une seule démo de plusieurs minutes. Aucune ne dépend des autres : 6 tests "
@@ -547,7 +548,7 @@ def build() -> gr.Blocks:
                         ts_btn.click(lambda: gr.Button(interactive=False), None, ts_btn) \
                             .then(functools.partial(run_scenario_by_key, TOOL_STEPS), [ts_sel, ts_voice], [ts_log, ts_res]) \
                             .then(lambda: gr.Button(interactive=True), None, ts_btn)
-                    with gr.Tab("Agent web — un test à la fois"):
+                    with gr.Tab("Agent web"):
                         gr.Markdown(
                             "L'ancien scénario enchaînait 6 requêtes dans une seule démo. Les 2 premières sont "
                             "indépendantes ; les 4 dernières ne le sont PAS (chacune ajoute une violation jusqu'à la "
