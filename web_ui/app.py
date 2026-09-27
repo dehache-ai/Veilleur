@@ -441,10 +441,11 @@ def build() -> gr.Blocks:
             .then(run_text, [sel, request, content, guardian, voice], [out, seen]) \
             .then(lambda: gr.Button(interactive=True), None, go)
         fake = str(ROOT / next(p for p, _, exp in IMAGE_EXAMPLES if exp == "block"))
-        b_img.click(lambda: (gr.Tabs(selected="t_image"), fake, gr.Button(interactive=False)), None, [tabs, img, goi]) \
-            .then(on_image_selected, img, [cap_html, outi, detail]) \
-            .then(run_image, [img, second, voicei], [outi, detail]) \
-            .then(lambda: gr.Button(interactive=True), None, goi)
+        # "Essayer en un clic" ne fait que sélectionner l'exemple truqué et afficher sa légende —
+        # exactement comme un clic manuel sur un exemple — SANS lancer l'analyse : le verdict ne
+        # doit apparaître qu'au clic sur « Analyser », ici comme ailleurs dans ce pilier.
+        b_img.click(lambda: (gr.Tabs(selected="t_image"), fake), None, [tabs, img]) \
+            .then(on_image_selected, img, [cap_html, outi, detail])
         b_agent.click(lambda: gr.Tabs(selected="t_agent"), None, tabs)
     return demo
 
