@@ -94,7 +94,10 @@ def start_local_server(port: int, duration: float) -> threading.Event:
     return ready
 
 
-def run_scenario(title: str, code: str, port: int, *, voice: bool, context: NetworkContext, allowed_ports: set[int] | None, duration: float, enforce: bool = True) -> None:
+def run_scenario(
+    title: str, code: str, port: int, *, voice: bool, context: NetworkContext, allowed_ports: set[int] | None,
+    duration: float, enforce: bool = True, confirm_answers: object | None = None,
+) -> None:
     print("=" * 100)
     print(title)
     start_local_server(port, duration)
@@ -104,7 +107,7 @@ def run_scenario(title: str, code: str, port: int, *, voice: bool, context: Netw
     enforced = threading.Event()
     verdicts = monitor_process(
         proc.pid, duration=duration, interval=0.1, voice=voice, context=context, extra_allowed_local_ports=allowed_ports,
-        enforcement="kill" if enforce else None, enforced_event=enforced,
+        enforcement="kill" if enforce else None, enforced_event=enforced, confirm_answers=confirm_answers,
     )
     proc.wait()
     # `enforced`, pas `proc.returncode` : un arrêt réel confirmé côté moniteur (psutil) ne fait pas
@@ -120,10 +123,29 @@ def main() -> None:
     parser.add_argument("--no-voice", action="store_true", help="Désactive la narration Gradium (mode de secours texte).")
     parser.add_argument("--scenario", type=int, choices=[1, 2, 3, 4], help="N'exécuter qu'un seul scénario.")
     parser.add_argument("--no-enforce", action="store_true", help="Alerte seulement : n'arrête pas le process de l'agent simulé (comportement d'avant).")
+    parser.add_argument(
+        "--confirm", choices=["simulated", "typed", "voice"], default="simulated",
+        help="Réponse à la confirmation du scénario 2 (le seul qui rend ask_user) : simulated = réponse scriptée "
+             "passée par TTS puis STT (défaut, sûr sans micro ni terminal interactif — c'est ce que lance l'UI web) ; "
+             "typed = clavier (terminal interactif requis) ; voice = micro réel (pip install sounddevice).",
+    )
     args = parser.parse_args()
     voice = not args.no_voice
     todo = [args.scenario] if args.scenario else [1, 2, 3, 4]
     enforce = not args.no_enforce
+
+    def build_confirm_answers():
+        """Réponse à la confirmation du scénario 2, construite paresseusement (n'importe
+        `victim_agent.confirmation` que si vraiment nécessaire)."""
+        from victim_agent.confirmation import MicrophoneAnswer, SimulatedVoiceAnswer, TypedAnswer
+
+        if args.confirm == "voice":
+            return MicrophoneAnswer()
+        if args.confirm == "typed":
+            return TypedAnswer()
+        # Réponse simulée : refus, pour montrer la boucle complète y compris l'arrêt réel qui suit
+        # (une approbation aurait l'air identique à "rien ne se passe", peu démonstratif).
+        return SimulatedVoiceAnswer(["Non, arrête cette connexion, je ne l'ai pas autorisée."])
 
     searching = NetworkContext(MISSION, "l'agent attend le résultat de l'outil de recherche d'hôtels")
     with veilleur_library():
@@ -138,6 +160,7 @@ def main() -> None:
                 "SCÉNARIO 2 — rythme inhabituel vers un hôte AUTORISÉ (25 connexions en 2,5 s)",
                 agent_code(SERVICE_PORT, 25, 0.1, 6, "(agent) rafale de connexions vers le service autorise (SIMULEE, locale)"),
                 SERVICE_PORT, voice=voice, context=searching, allowed_ports={SERVICE_PORT}, duration=14, enforce=enforce,
+                confirm_answers=build_confirm_answers() if enforce else None,
             )
         if 3 in todo:
             run_scenario(

@@ -319,6 +319,7 @@ def monitor_process(
     extra_allowed_local_ports: set[int] | None = None,
     enforcement: str | None = None,
     enforced_event: threading.Event | None = None,
+    confirm_answers: object | None = None,
 ) -> list[RiskVerdict]:
     """Surveille les connexions sortantes du process `pid` pendant `duration`
     secondes (sondage toutes les `interval` secondes), ou jusqu'à ce que
@@ -335,6 +336,11 @@ def monitor_process(
     moniteur observe le process de l'agent lui-même, l'arrêter couperait aussi le travail légitime, donc
     l'option n'y est pas activée. Le blocage intervient APRÈS la détection (et l'éventuel appel au
     juge LLM, environ 2 s) : la connexion a déjà été établie. Un verdict `ask_user` n'arrête rien.
+
+    `confirm_answers`, si fourni (une `victim_agent.confirmation.AnswerSource`), transforme un
+    verdict `ask_user` en vraie confirmation : question parlée, réponse interprétée par un LLM, et
+    arrêt réel (comme `enforcement="kill"` sur un `block`) si la réponse est un refus. Sans lui,
+    `ask_user` reste purement informatif (journal + narration), comme avant.
 
     `enforced_event`, si fourni, est levé quand un arrêt réel a effectivement eu lieu — l'appelant
     ne doit PAS déduire ce fait du code de sortie du process observé : `psutil.Process.kill()` (utilisé
@@ -377,10 +383,11 @@ def monitor_process(
     except psutil.Error:
         protected = {os.getpid()}
 
-    def enforce_if_needed(verdict: RiskVerdict, target: str) -> bool:
-        """Applique le blocage réel. Renvoie True si le process a été arrêté (ou n'existe plus)."""
-        if enforcement != "kill" or verdict.recommended_action != "block":
-            return False
+    def _perform_kill(reason: str, target: str) -> bool:
+        """Cœur du blocage réel, indépendant du verdict d'origine : utilisé pour un `block`
+        direct (`enforce_if_needed`) ET pour un `ask_user` refusé après confirmation
+        (`confirm_then_finish`). `reason` est journalisé et sert d'explication au verdict
+        d'enforcement. Renvoie True si le process a été arrêté (ou n'existe plus)."""
         if pid in protected:
             print("(blocage réel refusé : le process visé est le moniteur ou l'un de ses ancêtres)")
             return False
@@ -423,17 +430,25 @@ def monitor_process(
         log_verdict(
             source=f"application de la décision sur le process {pid}",
             original_user_intent="(supervision réseau, pas de requête texte)",
-            content_or_action=f"arrêt du process {pid} après un verdict block sur {target}",
+            content_or_action=f"arrêt du process {pid} après {reason}",
             guardian=GUARDIAN_NAME + "+enforcement",
-            verdict=RiskVerdict("critique", verdict.anomaly_type, f"Process {pid} arrêté : {verdict.explanation}", "block"),
+            verdict=RiskVerdict("critique", "connexion_non_autorisee", f"Process {pid} arrêté : {reason}", "block"),
         )
         return True
+
+    def enforce_if_needed(verdict: RiskVerdict, target: str) -> bool:
+        """Applique le blocage réel sur un verdict `block` direct. Renvoie True si le process
+        a été arrêté (ou n'existe plus)."""
+        if enforcement != "kill" or verdict.recommended_action != "block":
+            return False
+        return _perform_kill(f"un verdict block sur {target}", target)
 
     # Le juge LLM (environ 2 s) et la narration vocale ne doivent PAS bloquer le sondage : sinon une
     # connexion brève ouverte et fermée pendant ce temps est manquée. Chaque événement qui demande un
     # juge, une narration ou un blocage part dans un thread de travail ; la boucle continue de sonder.
     def finish(verdict: RiskVerdict, ip: str, port: int, target: str, already_logged: bool, source: str = "") -> None:
-        """Ordre : journal et affichage (rapides), BLOCAGE, puis narration (lente). Aucune étape ne peut empêcher la suivante."""
+        """Ordre : journal et affichage (rapides), BLOCAGE, puis confirmation ou narration (lentes).
+        Aucune étape ne peut empêcher la suivante."""
         with lock:
             verdicts.append(verdict)
         try:
@@ -444,7 +459,22 @@ def monitor_process(
             enforce_if_needed(verdict, target)
         except Exception as exc:
             print(f"(application du blocage impossible : {type(exc).__name__} : {exc})")
-        if voice and verdict.recommended_action in ("block", "ask_user"):
+        if verdict.recommended_action == "ask_user" and confirm_answers is not None and enforcement == "kill" and not killed.is_set():
+            # `ask_user` n'arrête rien tout seul (cf. docstring) : ici, une VRAIE confirmation est
+            # demandée (question parlée, réponse interprétée par un LLM), et un refus déclenche un
+            # arrêt réel — même mécanisme que `block`, cf. `_perform_kill`. `confirm_with_user` fait
+            # déjà sa propre narration de la question (qui inclut l'explication du verdict) : pas de
+            # narration séparée dans ce cas.
+            try:
+                from victim_agent.confirmation import confirm_with_user
+
+                result = asyncio.run(confirm_with_user(verdict, confirm_answers, speak=voice, play=voice))
+                print(f"   -> confirmation : {'APPROUVÉ' if result.approved else 'REFUSÉ'} ({result.decision}, {result.attempts} tentative(s))")
+                if not result.approved:
+                    _perform_kill(f"confirmation refusée par l'utilisateur ({result.decision}) : {result.explanation}", target)
+            except Exception as exc:
+                print(f"(confirmation impossible : {type(exc).__name__} : {exc})")
+        elif voice and verdict.recommended_action in ("block", "ask_user"):
             try:
                 asyncio.run(_narrate_connection(verdict))
             except Exception as exc:
@@ -589,8 +619,12 @@ def monitor_process(
         time.sleep(interval)
 
     # Laisse finir les jugements en cours, mais pas indéfiniment : un appel au modèle figé ne doit pas bloquer l'appelant.
-    _done, pending = futures_wait(futures, timeout=JUDGE_JOIN_TIMEOUT_S)
+    # Une confirmation (question parlée + réponse + interprétation, potentiellement une reprise)
+    # prend bien plus longtemps qu'un jugement seul : delai plus généreux dans ce cas, sans y
+    # toucher pour les autres appelants (narration/jugement simples).
+    join_timeout = max(JUDGE_JOIN_TIMEOUT_S, 60.0) if confirm_answers is not None else JUDGE_JOIN_TIMEOUT_S
+    _done, pending = futures_wait(futures, timeout=join_timeout)
     if pending:
-        print(f"({len(pending)} jugement(s) encore en cours après {JUDGE_JOIN_TIMEOUT_S:.0f} s : abandonnés)")
+        print(f"({len(pending)} jugement(s) encore en cours après {join_timeout:.0f} s : abandonnés)")
     executor.shutdown(wait=False, cancel_futures=True)
     return verdicts
