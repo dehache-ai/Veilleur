@@ -247,27 +247,53 @@ def scenario_info(sc: dict) -> str:
     return f"{kind}{sc['summary']}\n\n**Ce que nous avons observé lors de nos essais :** {sc['expected']}{llm}"
 
 
-def make_scenario_runner(key: str, sc: dict):
+VERDICT_RANK = {"allow": 0, "ask_user": 1, "block": 2}
+
+
+def scenario_outcome_card(out: str) -> str:
+    """Résume la fin du scénario : le code de sortie du process dit seulement s'il a été TUÉ
+    (blocage réel, réservé au scénario 1) — un verdict `ask_user` ou même `block` peut avoir été
+    journalisé sans arrêter le process (`ask_user` n'arrête jamais rien tout seul ; `block` non
+    plus sans `enforcement=\"kill\"`). "terminé normalement (rien n'a été arrêté)" à lui seul
+    laissait croire que rien de notable ne s'était passé — on ajoute donc le pire verdict vu
+    dans la sortie."""
+    m = re.search(r"Issue de l'agent : (.+?) \(code", out)
+    outcome = m.group(1) if m else "Terminé"
+    stopped = "ARRÊTÉ" in outcome
+    verdicts = re.findall(r"Verdict\s*:\s*(allow|ask_user|block)\s*\(", out)
+    worst = max(verdicts, key=lambda v: VERDICT_RANK.get(v, 0)) if verdicts else "allow"
+    if stopped:
+        cls, note = "no", ""
+    elif worst == "block":
+        cls, note = "no", "Un verdict « block » a été journalisé sans que le process ne soit arrêté (l'arrêt réel n'est activé que pour ce type de scénario précis) — voir le détail ci-dessus."
+    elif worst == "ask_user":
+        cls, note = "ask", ("Veilleur a demandé une confirmation (« ask_user ») en cours de route. « rien n'a été arrêté » veut seulement dire que "
+                             "le process a continué — ask_user ne stoppe jamais rien tout seul, contrairement à un vrai blocage.")
+    else:
+        cls, note = "ok", ""
+    why = f"<div class='why'>{esc(note)}</div>" if note else ""
+    return f"<div class='vc {cls}'><div class='head'>{esc(outcome)}</div>{why}</div>"
+
+
+def make_scenario_runner(key: str, sc: dict, voice: bool = False):
     def run():
         rec = core.recorded().get("scenario", {}).get(key)
         if not core.live_mode() and rec and key != "n3":
             yield "[Mode démonstration : résultat enregistré lors de nos essais. Sans clé API, le scénario n'est pas relancé]\n\n" + rec["output"], ""
             return
+        args = [a for a in sc["args"] if not (voice and a == "--no-voice")]
         header = ""
-        for out, code in core.run_script(sc["args"]):
-            summary = ""
-            if code is not None:
-                m = re.search(r"Issue de l'agent : (.+?) \(code", out)
-                summary = f"<div class='vc {'no' if 'ARRÊTÉ' in (m.group(1) if m else '') else 'ok'}'><div class='head'>{esc(m.group(1) if m else 'Terminé')}</div></div>" if m else ""
+        for out, code in core.run_script(args):
+            summary = scenario_outcome_card(out) if code is not None else ""
             yield header + out, summary
     return run
 
 
-def run_scenario_by_key(scenarios: dict, key: str):
-    """Comme `make_scenario_runner`, mais `key` est lu au moment du clic (depuis une liste
-    déroulante) plutôt que figé à la construction de l'UI — pour un seul bouton « Lancer ce
-    scénario » partagé par plusieurs scénarios."""
-    yield from make_scenario_runner(key, scenarios[key])()
+def run_scenario_by_key(scenarios: dict, key: str, voice: bool):
+    """Comme `make_scenario_runner`, mais `key` (et `voice`) sont lus au moment du clic (depuis
+    une liste déroulante et une case à cocher) plutôt que figés à la construction de l'UI — pour
+    un seul bouton « Lancer ce scénario » partagé par plusieurs scénarios."""
+    yield from make_scenario_runner(key, scenarios[key], voice)()
 
 
 # ── Journal ──────────────────────────────────────────────────────────────────────────────
@@ -400,12 +426,15 @@ def build() -> gr.Blocks:
                         n_choices = [(f"{'⚠️ anormal' if sc['kind'] == 'anormal' else '✅ normal'} — {sc['title']}", key) for key, sc in NETWORK_SCENARIOS.items()]
                         n_sel = gr.Dropdown(n_choices, value=n_choices[0][1], label="Scénario")
                         n_info = gr.Markdown(scenario_info(NETWORK_SCENARIOS[n_choices[0][1]]))
+                        with gr.Group(elem_classes=["voice-box"]):
+                            n_voice = gr.Checkbox(value=True, label="🔊 Voix sur détection (Gradium)",
+                                                   info="Ce sous-process narre lui-même à voix haute quand le juge bloque ou demande confirmation. Local uniquement.")
                         n_btn = gr.Button("Lancer ce scénario", variant="primary")
                         n_res = gr.HTML()
                         n_log = gr.Textbox(label="Sortie", lines=6, max_lines=24, autoscroll=True, placeholder="La sortie s'affiche ici, en direct, après « Lancer ce scénario ».")
                         n_sel.change(lambda k: scenario_info(NETWORK_SCENARIOS[k]), n_sel, n_info)
                         n_btn.click(lambda: gr.Button(interactive=False), None, n_btn) \
-                            .then(functools.partial(run_scenario_by_key, NETWORK_SCENARIOS), n_sel, [n_log, n_res]) \
+                            .then(functools.partial(run_scenario_by_key, NETWORK_SCENARIOS), [n_sel, n_voice], [n_log, n_res]) \
                             .then(lambda: gr.Button(interactive=True), None, n_btn)
                     with gr.Tab("Outils, web, échanges entre agents"):
                         gr.Markdown(
